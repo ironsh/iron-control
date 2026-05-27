@@ -26,11 +26,18 @@ class StaticSecretRefTest < ActiveSupport::TestCase
     assert StaticSecretRef.new(valid_replace_attrs).valid?
   end
 
-  test "is valid with no namespace, foreign_id, or name" do
+  test "namespace defaults to 'default' and is valid with no foreign_id or name" do
     ref = StaticSecretRef.new(
       inject_config: { "header" => "Authorization" }
     )
+    assert_equal "default", ref.namespace
     assert ref.valid?, ref.errors.full_messages.inspect
+  end
+
+  test "is invalid when namespace is blank" do
+    ref = StaticSecretRef.new(valid_inject_attrs(namespace: ""))
+    assert_not ref.valid?
+    assert_includes ref.errors[:namespace], "can't be blank"
   end
 
   test "name is free-form and accepts arbitrary characters" do

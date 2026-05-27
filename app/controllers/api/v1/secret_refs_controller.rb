@@ -34,6 +34,7 @@ module Api
           :namespace, :foreign_id, :name, :description,
           labels: {}, inject_config: {}, replace_config: {}
         )
+        ssr_attrs[:namespace] = "default" if ref.new_record? && ssr_attrs[:namespace].blank?
 
         source_attrs = if attrs.key?(:source) && attrs[:source].present?
           attrs.require(:source).permit(:source_type, config: {})

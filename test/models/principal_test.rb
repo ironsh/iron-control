@@ -6,12 +6,20 @@ class PrincipalTest < ActiveSupport::TestCase
     assert principal.valid?
   end
 
-  test "is valid with no namespace or foreign_id" do
-    assert Principal.new.valid?
+  test "namespace defaults to 'default'" do
+    principal = Principal.new
+    assert_equal "default", principal.namespace
+    assert principal.valid?
   end
 
   test "is valid with only a name" do
     assert Principal.new(name: "Just a label").valid?
+  end
+
+  test "is invalid when namespace is blank" do
+    principal = Principal.new(namespace: "", foreign_id: "C-blank")
+    assert_not principal.valid?
+    assert_includes principal.errors[:namespace], "can't be blank"
   end
 
   test "foreign_id is unique within a namespace" do
