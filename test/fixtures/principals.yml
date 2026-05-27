@@ -1,0 +1,12 @@
+centaur_channel:
+  namespace: centaur
+  foreign_id: C0123456789
+  labels:
+    kind: slack_channel
+    team: platform
+
+traceforce_user:
+  namespace: traceforce
+  foreign_id: U987654321
+  labels:
+    kind: user
