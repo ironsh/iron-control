@@ -1,0 +1,194 @@
+require "test_helper"
+
+module Api
+  module V1
+    class SecretRefsControllerTest < ActionDispatch::IntegrationTest
+      ACME_TOKEN = "iak_acme-ci-token".freeze
+
+      def auth_headers(token = ACME_TOKEN)
+        { "Authorization" => "Bearer #{token}", "Content-Type" => "application/json" }
+      end
+
+      def json_body
+        JSON.parse(response.body)
+      end
+
+      test "rejects requests without an Authorization header" do
+        get api_v1_secret_ref_url(id: "ssr_unknown")
+        assert_response :unauthorized
+        assert_equal "invalid or missing API key", json_body.dig("error", "message")
+      end
+
+      test "rejects requests with an unknown bearer token" do
+        get api_v1_secret_ref_url(id: "ssr_unknown"),
+            headers: auth_headers("iak_not-a-real-token")
+        assert_response :unauthorized
+      end
+
+      test "rejects requests with a malformed Authorization scheme" do
+        get api_v1_secret_ref_url(id: "ssr_unknown"),
+            headers: { "Authorization" => "Token #{ACME_TOKEN}" }
+        assert_response :unauthorized
+      end
+
+      test "GET returns a SecretRef with its source and rules" do
+        ref = static_secret_refs(:github_token_inject)
+        SecretSource.create!(source_type: "env", config: { "var" => "GITHUB_TOKEN" },
+                              static_secret_ref: ref)
+        RequestRule.create!(host: "api.github.com", http_methods: %w[GET POST],
+                             paths: [ "/" ], position: 0, static_secret_ref: ref)
+
+        get api_v1_secret_ref_url(id: ref.oid), headers: auth_headers
+        assert_response :ok
+
+        data = json_body.fetch("data")
+        assert_equal ref.oid, data["id"]
+        assert_equal ref.namespace, data["namespace"]
+        assert_equal ref.name, data["name"]
+        assert_equal({ "header" => "Authorization", "formatter" => "Bearer {{ .Value }}" },
+                     data["inject_config"])
+        assert_equal "env", data.dig("source", "source_type")
+        assert_equal({ "var" => "GITHUB_TOKEN" }, data.dig("source", "config"))
+        assert_nil data.dig("source", "id"), "source should not expose its own id"
+        assert_equal 1, data["rules"].length
+        rule = data["rules"].first
+        assert_equal "api.github.com", rule["host"]
+        assert_equal %w[GET POST], rule["http_methods"]
+        assert_nil rule["id"], "rule should not expose its own id"
+      end
+
+      test "GET returns 404 for an unknown oid" do
+        get api_v1_secret_ref_url(id: "ssr_nope"), headers: auth_headers
+        assert_response :not_found
+      end
+
+      test "POST creates a SecretRef with nested source and rules in a single transaction" do
+        body = {
+          data: {
+            namespace: "acme",
+            name: "api-created-ref",
+            description: "from API",
+            labels: { "team" => "platform" },
+            inject_config: { "header" => "Authorization", "formatter" => "Bearer {{ .Value }}" },
+            source: { source_type: "env", config: { "var" => "API_TOKEN" } },
+            rules: [
+              { host: "api.example.com", http_methods: [ "GET" ], paths: [ "/" ] },
+              { host: "api2.example.com", http_methods: [ "POST" ], paths: [ "/v1" ] }
+            ]
+          }
+        }
+
+        assert_difference -> { StaticSecretRef.count } => 1,
+                          -> { SecretSource.count } => 1,
+                          -> { RequestRule.count } => 2 do
+          post api_v1_secret_refs_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :created
+
+        data = json_body.fetch("data")
+        assert_match(/\Assr_/, data["id"])
+        assert_equal "api-created-ref", data["name"]
+        assert_equal "env", data.dig("source", "source_type")
+        assert_equal [ 0, 1 ], data["rules"].map { |r| r["position"] }
+      end
+
+      test "POST returns 422 when SSR validation fails (both inject and replace configs)" do
+        body = {
+          data: {
+            namespace: "acme",
+            name: "invalid-ref",
+            inject_config: { "header" => "Authorization" },
+            replace_config: { "proxy_value" => "__TOKEN__" }
+          }
+        }
+
+        assert_no_difference -> { StaticSecretRef.count } do
+          post api_v1_secret_refs_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :unprocessable_content
+        assert_equal "validation failed", json_body.dig("error", "message")
+      end
+
+      test "POST returns 422 and rolls back SSR when a nested rule is invalid" do
+        body = {
+          data: {
+            namespace: "acme",
+            name: "rolled-back",
+            inject_config: { "header" => "Authorization" },
+            source: { source_type: "env", config: { "var" => "X" } },
+            rules: [ { host: "good.example.com", http_methods: [ "GET" ], paths: [ "/" ] },
+                     { http_methods: [ "GET" ], paths: [ "/" ] } ]
+          }
+        }
+
+        assert_no_difference [ "StaticSecretRef.count", "SecretSource.count", "RequestRule.count" ] do
+          post api_v1_secret_refs_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :unprocessable_content
+      end
+
+      test "POST returns 400 when the data key is missing" do
+        post api_v1_secret_refs_url, params: { namespace: "acme" }.to_json, headers: auth_headers
+        assert_response :bad_request
+      end
+
+      test "PUT updates SSR fields and replaces source and rules" do
+        ref = static_secret_refs(:github_token_inject)
+        SecretSource.create!(source_type: "env", config: { "var" => "OLD" }, static_secret_ref: ref)
+        old_rule = RequestRule.create!(host: "old.example.com", http_methods: [ "GET" ],
+                                       paths: [ "/" ], position: 0, static_secret_ref: ref)
+
+        body = {
+          data: {
+            namespace: ref.namespace,
+            name: ref.name,
+            description: "updated",
+            inject_config: { "header" => "X-New" },
+            source: { source_type: "env", config: { "var" => "NEW" } },
+            rules: [ { host: "new.example.com", http_methods: [ "POST" ], paths: [ "/v2" ] } ]
+          }
+        }
+
+        put api_v1_secret_ref_url(id: ref.oid), params: body.to_json, headers: auth_headers
+        assert_response :ok
+
+        ref.reload
+        assert_equal "updated", ref.description
+        assert_equal({ "header" => "X-New" }, ref.inject_config)
+        assert_equal "NEW", ref.source.config["var"]
+        assert_equal [ "new.example.com" ], ref.rules.map(&:host)
+        assert_nil RequestRule.find_by(id: old_rule.id), "old rule should be deleted"
+      end
+
+      test "PUT rolls back changes when validation fails" do
+        ref = static_secret_refs(:github_token_inject)
+        SecretSource.create!(source_type: "env", config: { "var" => "ORIGINAL" }, static_secret_ref: ref)
+
+        body = {
+          data: {
+            namespace: ref.namespace,
+            name: ref.name,
+            description: "should not persist",
+            inject_config: { "header" => "Authorization" },
+            replace_config: { "proxy_value" => "__X__" },
+            source: { source_type: "env", config: { "var" => "WOULD_BE_NEW" } }
+          }
+        }
+
+        put api_v1_secret_ref_url(id: ref.oid), params: body.to_json, headers: auth_headers
+        assert_response :unprocessable_content
+
+        ref.reload
+        assert_not_equal "should not persist", ref.description
+        assert_equal "ORIGINAL", ref.source.config["var"]
+      end
+
+      test "PUT returns 404 for an unknown oid" do
+        put api_v1_secret_ref_url(id: "ssr_nope"),
+            params: { data: { namespace: "acme", name: "x", inject_config: { "header" => "X" } } }.to_json,
+            headers: auth_headers
+        assert_response :not_found
+      end
+    end
+  end
+end
