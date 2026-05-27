@@ -2,7 +2,7 @@ require "test_helper"
 
 class SecretSourceTest < ActiveSupport::TestCase
   def new_source(attrs = {})
-    SecretSource.new({ created_by: api_keys(:acme_ci_key) }.merge(attrs))
+    SecretSource.new(attrs)
   end
 
   test "env source is valid with var" do
@@ -91,9 +91,4 @@ class SecretSourceTest < ActiveSupport::TestCase
     assert_equal s, SecretSource.find_by_oid(s.oid)
   end
 
-  test "requires created_by" do
-    s = SecretSource.new(source_type: "env", config: { "var" => "FOO" })
-    assert_not s.valid?
-    assert_includes s.errors[:created_by], "must exist"
-  end
 end

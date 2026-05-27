@@ -1,5 +1,5 @@
 class AddCreatedByToApiResources < ActiveRecord::Migration[8.1]
-  TABLES = %i[grants principals static_secret_refs secret_sources request_rules].freeze
+  TABLES = %i[grants principals static_secret_refs].freeze
 
   def change
     TABLES.each do |table|

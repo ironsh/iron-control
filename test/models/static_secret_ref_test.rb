@@ -150,15 +150,14 @@ class StaticSecretRefTest < ActiveSupport::TestCase
 
   test "has_one source association" do
     ref = static_secret_refs(:github_token_inject)
-    src = SecretSource.create!(source_type: "env", config: { "var" => "GITHUB_TOKEN" }, static_secret_ref: ref, created_by: api_keys(:acme_ci_key))
+    src = SecretSource.create!(source_type: "env", config: { "var" => "GITHUB_TOKEN" }, static_secret_ref: ref)
     assert_equal src, ref.reload.source
   end
 
   test "has_many rules association" do
     ref = static_secret_refs(:github_token_inject)
-    key = api_keys(:acme_ci_key)
-    r1 = RequestRule.create!(host: "api.github.com", static_secret_ref: ref, created_by: key)
-    r2 = RequestRule.create!(host: "api.example.com", static_secret_ref: ref, position: 1, created_by: key)
+    r1 = RequestRule.create!(host: "api.github.com", static_secret_ref: ref)
+    r2 = RequestRule.create!(host: "api.example.com", static_secret_ref: ref, position: 1)
     assert_equal [ r1, r2 ], ref.reload.rules.to_a
   end
 

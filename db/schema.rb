@@ -62,14 +62,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_220001) do
   create_table "request_rules", force: :cascade do |t|
     t.string "cidr"
     t.datetime "created_at", null: false
-    t.bigint "created_by_id", null: false
     t.string "host"
     t.jsonb "http_methods", default: [], null: false
     t.jsonb "paths", default: [], null: false
     t.integer "position", default: 0, null: false
     t.bigint "static_secret_ref_id"
     t.datetime "updated_at", null: false
-    t.index ["created_by_id"], name: "index_request_rules_on_created_by_id"
     t.index ["host"], name: "index_request_rules_on_host"
     t.index ["position"], name: "index_request_rules_on_position"
     t.index ["static_secret_ref_id"], name: "index_request_rules_on_static_secret_ref_id"
@@ -78,11 +76,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_220001) do
   create_table "secret_sources", force: :cascade do |t|
     t.jsonb "config", default: {}, null: false
     t.datetime "created_at", null: false
-    t.bigint "created_by_id", null: false
     t.string "source_type", null: false
     t.bigint "static_secret_ref_id"
     t.datetime "updated_at", null: false
-    t.index ["created_by_id"], name: "index_secret_sources_on_created_by_id"
     t.index ["source_type"], name: "index_secret_sources_on_source_type"
     t.index ["static_secret_ref_id"], name: "index_secret_sources_on_static_secret_ref_id", unique: true
   end
@@ -117,9 +113,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_220001) do
   add_foreign_key "grants", "static_secret_refs"
   add_foreign_key "principals", "api_keys", column: "created_by_id"
   add_foreign_key "proxies", "principals"
-  add_foreign_key "request_rules", "api_keys", column: "created_by_id"
   add_foreign_key "request_rules", "static_secret_refs"
-  add_foreign_key "secret_sources", "api_keys", column: "created_by_id"
   add_foreign_key "secret_sources", "static_secret_refs"
   add_foreign_key "static_secret_refs", "api_keys", column: "created_by_id"
 end

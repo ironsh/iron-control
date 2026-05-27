@@ -52,19 +52,12 @@ module Api
 
           ref.source&.destroy!
           if source_attrs
-            SecretSource.create!(source_attrs.to_h.merge(
-              static_secret_ref: ref,
-              created_by: current_api_key
-            ))
+            SecretSource.create!(source_attrs.to_h.merge(static_secret_ref: ref))
           end
 
           ref.rules.destroy_all
           rules_attrs.each_with_index do |r, i|
-            RequestRule.create!(r.to_h.merge(
-              position: i,
-              static_secret_ref: ref,
-              created_by: current_api_key
-            ))
+            RequestRule.create!(r.to_h.merge(position: i, static_secret_ref: ref))
           end
 
           ref.reload

@@ -7,7 +7,6 @@ class RequestRule < ApplicationRecord
   METHOD_WILDCARD = "*".freeze
 
   belongs_to :static_secret_ref, optional: true
-  belongs_to :created_by, -> { unscoped }, class_name: "ApiKey"
 
   default_scope { order(:position) }
 

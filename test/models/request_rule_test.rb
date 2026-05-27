@@ -2,11 +2,11 @@ require "test_helper"
 
 class RequestRuleTest < ActiveSupport::TestCase
   def new_rule(attrs = {})
-    RequestRule.new({ created_by: api_keys(:acme_ci_key) }.merge(attrs))
+    RequestRule.new(attrs)
   end
 
   def create_rule!(attrs = {})
-    RequestRule.create!({ created_by: api_keys(:acme_ci_key) }.merge(attrs))
+    RequestRule.create!(attrs)
   end
 
   test "is valid with host only" do
@@ -116,9 +116,4 @@ class RequestRuleTest < ActiveSupport::TestCase
     assert_equal r, RequestRule.find_by_oid(r.oid)
   end
 
-  test "requires created_by" do
-    r = RequestRule.new(host: "x.example.com")
-    assert_not r.valid?
-    assert_includes r.errors[:created_by], "must exist"
-  end
 end
