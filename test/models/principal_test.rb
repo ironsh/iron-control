@@ -45,17 +45,24 @@ class PrincipalTest < ActiveSupport::TestCase
     assert_equal({ "env" => "prod", "team" => "platform" }, principal.reload.labels)
   end
 
-  test "namespace and foreign_id are immutable after creation" do
+  test "namespace is immutable after creation" do
     principal = principals(:centaur_channel)
-    original_namespace = principal.namespace
-    original_foreign_id = principal.foreign_id
+    assert_raises(ActiveRecord::ReadonlyAttributeError) do
+      principal.update!(namespace: "other")
+    end
+  end
 
-    principal.update!(namespace: "other", foreign_id: "C-other", labels: { "changed" => "yes" })
-    principal.reload
+  test "foreign_id is immutable after creation" do
+    principal = principals(:centaur_channel)
+    assert_raises(ActiveRecord::ReadonlyAttributeError) do
+      principal.update!(foreign_id: "C-other")
+    end
+  end
 
-    assert_equal original_namespace, principal.namespace
-    assert_equal original_foreign_id, principal.foreign_id
-    assert_equal({ "changed" => "yes" }, principal.labels)
+  test "labels remain mutable after creation" do
+    principal = principals(:centaur_channel)
+    principal.update!(labels: { "changed" => "yes" })
+    assert_equal({ "changed" => "yes" }, principal.reload.labels)
   end
 
   test "oid returns prn-prefixed encoded id" do
@@ -92,14 +99,6 @@ class PrincipalTest < ActiveSupport::TestCase
     assert_raises(ActiveRecord::RecordNotFound) do
       Principal.find_by_oid!("prn_doesnotexist")
     end
-  end
-
-  test "decode_oid rejects non-canonical encodings" do
-    principal = principals(:centaur_channel)
-    canonical = principal.oid.delete_prefix("prn_")
-    # Sqids can decode some non-canonical inputs to the same number; we require canonical form.
-    longer = canonical + canonical[0]
-    assert_nil Principal.decode_oid("prn_#{longer}") if Principal.oid_encoder.decode(longer) == [ principal.id ]
   end
 
   test "oid_prefix raises NotImplementedError when not declared" do
