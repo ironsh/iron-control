@@ -63,7 +63,7 @@ module Api
 
       total_pages = total.zero? ? 0 : ((total + limit - 1) / limit)
       meta = { page: page, limit: limit, total: total, total_pages: total_pages }
-      [records, meta]
+      [ records, meta ]
     end
 
     def label_filter_params
