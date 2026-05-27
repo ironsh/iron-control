@@ -2,13 +2,16 @@ api_host:
   host: api.example.com
   http_methods: ["POST"]
   paths: ["/v1/*"]
+  created_by: acme_ci_key
 
 internal_cidr:
   cidr: 10.0.0.0/8
   http_methods: []
   paths: []
+  created_by: acme_ci_key
 
 wildcard_host:
   host: "*"
   http_methods: ["*"]
   paths: []
+  created_by: acme_ci_key

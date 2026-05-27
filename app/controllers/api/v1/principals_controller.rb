@@ -22,6 +22,7 @@ module Api
         attrs = data_params.permit(:namespace, :foreign_id, :name, labels: {})
         attrs[:namespace] = "default" if attrs[:namespace].blank?
         principal = Principal.new(attrs)
+        principal.created_by = current_api_key
         principal.save!
         render status: :created, json: { data: record_payload(principal) }
       rescue ActiveRecord::RecordInvalid => e

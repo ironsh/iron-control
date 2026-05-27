@@ -6,7 +6,8 @@ class StaticSecretRefTest < ActiveSupport::TestCase
       namespace: "acme",
       foreign_id: "new-ref",
       name: "a friendly name",
-      inject_config: { "header" => "Authorization", "formatter" => "Bearer {{ .Value }}" }
+      inject_config: { "header" => "Authorization", "formatter" => "Bearer {{ .Value }}" },
+      created_by: api_keys(:acme_ci_key)
     }.merge(overrides)
   end
 
@@ -14,7 +15,8 @@ class StaticSecretRefTest < ActiveSupport::TestCase
     {
       namespace: "acme",
       foreign_id: "new-ref",
-      replace_config: { "proxy_value" => "__TOKEN__" }
+      replace_config: { "proxy_value" => "__TOKEN__" },
+      created_by: api_keys(:acme_ci_key)
     }.merge(overrides)
   end
 
@@ -28,7 +30,8 @@ class StaticSecretRefTest < ActiveSupport::TestCase
 
   test "namespace defaults to 'default' and is valid with no foreign_id or name" do
     ref = StaticSecretRef.new(
-      inject_config: { "header" => "Authorization" }
+      inject_config: { "header" => "Authorization" },
+      created_by: api_keys(:acme_ci_key)
     )
     assert_equal "default", ref.namespace
     assert ref.valid?, ref.errors.full_messages.inspect
@@ -73,7 +76,7 @@ class StaticSecretRefTest < ActiveSupport::TestCase
   end
 
   test "must define one of inject_config or replace_config" do
-    ref = StaticSecretRef.new(namespace: "acme", foreign_id: "neither")
+    ref = StaticSecretRef.new(namespace: "acme", foreign_id: "neither", created_by: api_keys(:acme_ci_key))
     assert_not ref.valid?
     assert_includes ref.errors[:base], "must define one of inject_config or replace_config"
   end
@@ -83,7 +86,8 @@ class StaticSecretRefTest < ActiveSupport::TestCase
       namespace: "acme",
       foreign_id: "both",
       inject_config: { "header" => "Authorization" },
-      replace_config: { "proxy_value" => "__TOKEN__" }
+      replace_config: { "proxy_value" => "__TOKEN__" },
+      created_by: api_keys(:acme_ci_key)
     )
     assert_not ref.valid?
     assert_includes ref.errors[:base], "inject_config and replace_config are mutually exclusive"
@@ -146,14 +150,15 @@ class StaticSecretRefTest < ActiveSupport::TestCase
 
   test "has_one source association" do
     ref = static_secret_refs(:github_token_inject)
-    src = SecretSource.create!(source_type: "env", config: { "var" => "GITHUB_TOKEN" }, static_secret_ref: ref)
+    src = SecretSource.create!(source_type: "env", config: { "var" => "GITHUB_TOKEN" }, static_secret_ref: ref, created_by: api_keys(:acme_ci_key))
     assert_equal src, ref.reload.source
   end
 
   test "has_many rules association" do
     ref = static_secret_refs(:github_token_inject)
-    r1 = RequestRule.create!(host: "api.github.com", static_secret_ref: ref)
-    r2 = RequestRule.create!(host: "api.example.com", static_secret_ref: ref, position: 1)
+    key = api_keys(:acme_ci_key)
+    r1 = RequestRule.create!(host: "api.github.com", static_secret_ref: ref, created_by: key)
+    r2 = RequestRule.create!(host: "api.example.com", static_secret_ref: ref, position: 1, created_by: key)
     assert_equal [ r1, r2 ], ref.reload.rules.to_a
   end
 

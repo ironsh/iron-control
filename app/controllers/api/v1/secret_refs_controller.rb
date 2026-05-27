@@ -12,7 +12,7 @@ module Api
       end
 
       def create
-        ref = StaticSecretRef.new
+        ref = StaticSecretRef.new(created_by: current_api_key)
         upsert!(ref, data_params)
         render status: :created, json: { data: record_payload(ref) }
       rescue ActiveRecord::RecordInvalid => e
@@ -52,12 +52,19 @@ module Api
 
           ref.source&.destroy!
           if source_attrs
-            SecretSource.create!(source_attrs.to_h.merge(static_secret_ref: ref))
+            SecretSource.create!(source_attrs.to_h.merge(
+              static_secret_ref: ref,
+              created_by: current_api_key
+            ))
           end
 
           ref.rules.destroy_all
           rules_attrs.each_with_index do |r, i|
-            RequestRule.create!(r.to_h.merge(position: i, static_secret_ref: ref))
+            RequestRule.create!(r.to_h.merge(
+              position: i,
+              static_secret_ref: ref,
+              created_by: current_api_key
+            ))
           end
 
           ref.reload

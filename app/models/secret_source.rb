@@ -14,6 +14,7 @@ class SecretSource < ApplicationRecord
   }.freeze
 
   belongs_to :static_secret_ref, optional: true
+  belongs_to :created_by, -> { unscoped }, class_name: "ApiKey"
 
   attr_readonly :source_type
 

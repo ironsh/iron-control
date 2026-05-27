@@ -4,7 +4,8 @@ class GrantTest < ActiveSupport::TestCase
   def valid_attrs(overrides = {})
     {
       principal: principals(:acme_channel),
-      static_secret_ref: static_secret_refs(:github_token_inject)
+      static_secret_ref: static_secret_refs(:github_token_inject),
+      created_by: api_keys(:acme_ci_key)
     }.merge(overrides)
   end
 

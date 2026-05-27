@@ -34,9 +34,9 @@ module Api
       test "GET returns a SecretRef with its source and rules" do
         ref = static_secret_refs(:github_token_inject)
         SecretSource.create!(source_type: "env", config: { "var" => "GITHUB_TOKEN" },
-                              static_secret_ref: ref)
+                              static_secret_ref: ref, created_by: api_keys(:acme_ci_key))
         RequestRule.create!(host: "api.github.com", http_methods: %w[GET POST],
-                             paths: [ "/" ], position: 0, static_secret_ref: ref)
+                             paths: [ "/" ], position: 0, static_secret_ref: ref, created_by: api_keys(:acme_ci_key))
 
         get api_v1_secret_ref_url(id: ref.oid), headers: auth_headers
         assert_response :ok
@@ -156,9 +156,9 @@ module Api
 
       test "PUT updates SSR fields and replaces source and rules" do
         ref = static_secret_refs(:github_token_inject)
-        SecretSource.create!(source_type: "env", config: { "var" => "OLD" }, static_secret_ref: ref)
+        SecretSource.create!(source_type: "env", config: { "var" => "OLD" }, static_secret_ref: ref, created_by: api_keys(:acme_ci_key))
         old_rule = RequestRule.create!(host: "old.example.com", http_methods: [ "GET" ],
-                                       paths: [ "/" ], position: 0, static_secret_ref: ref)
+                                       paths: [ "/" ], position: 0, static_secret_ref: ref, created_by: api_keys(:acme_ci_key))
 
         body = {
           data: {
@@ -184,7 +184,7 @@ module Api
 
       test "PUT rolls back changes when validation fails" do
         ref = static_secret_refs(:github_token_inject)
-        SecretSource.create!(source_type: "env", config: { "var" => "ORIGINAL" }, static_secret_ref: ref)
+        SecretSource.create!(source_type: "env", config: { "var" => "ORIGINAL" }, static_secret_ref: ref, created_by: api_keys(:acme_ci_key))
 
         body = {
           data: {
