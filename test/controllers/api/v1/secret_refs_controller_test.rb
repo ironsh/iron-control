@@ -92,6 +92,28 @@ module Api
         assert_equal [ 0, 1 ], data["rules"].map { |r| r["position"] }
       end
 
+      test "POST ignores client-supplied rule positions and uses the array index" do
+        body = {
+          data: {
+            namespace: "acme",
+            name: "position-override",
+            inject_config: { "header" => "Authorization" },
+            source: { source_type: "env", config: { "var" => "X" } },
+            rules: [
+              { host: "a.example.com", http_methods: [ "GET" ], paths: [ "/" ], position: 99 },
+              { host: "b.example.com", http_methods: [ "GET" ], paths: [ "/" ], position: 42 }
+            ]
+          }
+        }
+
+        post api_v1_secret_refs_url, params: body.to_json, headers: auth_headers
+        assert_response :created
+
+        data = json_body.fetch("data")
+        assert_equal [ "a.example.com", "b.example.com" ], data["rules"].map { |r| r["host"] }
+        assert_equal [ 0, 1 ], data["rules"].map { |r| r["position"] }
+      end
+
       test "POST returns 422 when SSR validation fails (both inject and replace configs)" do
         body = {
           data: {
