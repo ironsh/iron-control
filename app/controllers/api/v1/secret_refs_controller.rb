@@ -36,7 +36,7 @@ module Api
 
         rules_attrs = Array(attrs[:rules]).map do |r|
           ActionController::Parameters.new(r.to_unsafe_h).permit(
-            :host, :cidr, :position, http_methods: [], paths: []
+            :host, :cidr, http_methods: [], paths: []
           )
         end
 
@@ -51,9 +51,7 @@ module Api
 
           ref.rules.destroy_all
           rules_attrs.each_with_index do |r, i|
-            rule = r.to_h
-            rule["position"] ||= i
-            RequestRule.create!(rule.merge(static_secret_ref: ref))
+            RequestRule.create!(r.to_h.merge(position: i, static_secret_ref: ref))
           end
 
           ref.reload
