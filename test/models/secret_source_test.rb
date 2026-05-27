@@ -90,5 +90,4 @@ class SecretSourceTest < ActiveSupport::TestCase
     s = secret_sources(:env_token)
     assert_equal s, SecretSource.find_by_oid(s.oid)
   end
-
 end

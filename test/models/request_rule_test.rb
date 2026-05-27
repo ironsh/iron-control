@@ -115,5 +115,4 @@ class RequestRuleTest < ActiveSupport::TestCase
     r = request_rules(:api_host)
     assert_equal r, RequestRule.find_by_oid(r.oid)
   end
-
 end
