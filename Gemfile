@@ -8,6 +8,8 @@ gem "propshaft"
 gem "pg", "~> 1.5"
 # Opaque ID encoding (bigint <-> short string) for externally-exposed IDs
 gem "sqids", "~> 0.2"
+# JSON Schema validation for jsonb config columns
+gem "json_schemer", "~> 2.3"
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", ">= 5.0"
 # Use JavaScript with ESM import maps [https://github.com/rails/importmap-rails]

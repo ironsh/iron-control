@@ -6,6 +6,8 @@ class RequestRule < ApplicationRecord
   HTTP_METHODS = %w[GET HEAD POST PUT PATCH DELETE OPTIONS CONNECT].freeze
   METHOD_WILDCARD = "*".freeze
 
+  belongs_to :static_secret_ref, optional: true
+
   default_scope { order(:position) }
 
   validates :position, presence: true, numericality: { only_integer: true }
