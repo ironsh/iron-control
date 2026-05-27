@@ -70,6 +70,29 @@ class ApiKeyTest < ActiveSupport::TestCase
     assert_equal key, ApiKey.unscoped.find_by(id: key.id)
   end
 
+  test "rejects an externally-supplied token whose format is wrong" do
+    [
+      "wrong_#{"a" * 64}",
+      "iak_abc",
+      "iak_#{"g" * 64}",
+      "iak_#{"A" * 64}"
+    ].each do |bad|
+      key = ApiKey.new(valid_attrs(user: users(:globex_admin)))
+      key.token = bad
+      key.token_hash = ApiKey.hash_token(bad)
+      assert_not key.valid?, "expected #{bad.inspect} to be rejected"
+      assert(key.errors[:token].any?, "expected token error for #{bad.inspect}")
+    end
+  end
+
+  test "accepts an externally-supplied token in the canonical format" do
+    good = "iak_#{"a" * 64}"
+    key = ApiKey.new(valid_attrs(user: users(:globex_admin)))
+    key.token = good
+    key.token_hash = ApiKey.hash_token(good)
+    assert key.valid?, key.errors.full_messages.join(", ")
+  end
+
   test "find_by_token skips soft-deleted keys" do
     key = ApiKey.create!(valid_attrs(user: users(:globex_admin)))
     plaintext = key.token
