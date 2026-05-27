@@ -1,5 +1,7 @@
 class StaticSecretRef < ApplicationRecord
-  oid_prefix "ssc"
+  oid_prefix "ssr"
+
+  has_many :grants, dependent: :destroy
 
   NAME_FORMAT = /\A[a-zA-Z0-9_-]+\z/
 

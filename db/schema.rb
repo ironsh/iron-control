@@ -10,9 +10,18 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_27_171533) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_27_182421) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "grants", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "principal_id", null: false
+    t.bigint "static_secret_ref_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["principal_id"], name: "index_grants_on_principal_id"
+    t.index ["static_secret_ref_id"], name: "index_grants_on_static_secret_ref_id"
+  end
 
   create_table "principals", force: :cascade do |t|
     t.datetime "created_at", null: false
@@ -61,6 +70,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_171533) do
     t.index ["namespace", "name"], name: "index_static_secret_refs_on_namespace_and_name", unique: true
   end
 
+  add_foreign_key "grants", "principals"
+  add_foreign_key "grants", "static_secret_refs"
   add_foreign_key "request_rules", "static_secret_refs"
   add_foreign_key "secret_sources", "static_secret_refs"
 end

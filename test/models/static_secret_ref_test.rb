@@ -152,8 +152,8 @@ class StaticSecretRefTest < ActiveSupport::TestCase
     assert_equal [ r1, r2 ], ref.reload.rules.to_a
   end
 
-  test "declares ssc as its oid prefix" do
-    assert_equal "ssc", StaticSecretRef.oid_prefix
+  test "declares ssr as its oid prefix" do
+    assert_equal "ssr", StaticSecretRef.oid_prefix
   end
 
   test "find_by_oid round-trips" do
