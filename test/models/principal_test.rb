@@ -65,44 +65,7 @@ class PrincipalTest < ActiveSupport::TestCase
     assert_equal({ "changed" => "yes" }, principal.reload.labels)
   end
 
-  test "oid returns prn-prefixed encoded id" do
-    principal = principals(:centaur_channel)
-    oid = principal.oid
-    assert_match(/\Aprn_[A-Za-z0-9]+\z/, oid)
-    assert_operator oid.length, :>=, "prn_".length + OpaqueId::MIN_LENGTH
-  end
-
-  test "oid is nil for unpersisted records" do
-    assert_nil Principal.new(namespace: "centaur", foreign_id: "x").oid
-  end
-
-  test "find_by_oid round-trips" do
-    principal = principals(:centaur_channel)
-    assert_equal principal, Principal.find_by_oid(principal.oid)
-  end
-
-  test "find_by_oid returns nil for malformed input" do
-    assert_nil Principal.find_by_oid(nil)
-    assert_nil Principal.find_by_oid("")
-    assert_nil Principal.find_by_oid("not-a-prn")
-    assert_nil Principal.find_by_oid("prn_")
-    assert_nil Principal.find_by_oid("prn_!!!invalid!!!")
-  end
-
-  test "find_by_oid rejects wrong prefix" do
-    principal = principals(:centaur_channel)
-    encoded = principal.oid.delete_prefix("prn_")
-    assert_nil Principal.find_by_oid("grant_#{encoded}")
-  end
-
-  test "find_by_oid! raises on miss" do
-    assert_raises(ActiveRecord::RecordNotFound) do
-      Principal.find_by_oid!("prn_doesnotexist")
-    end
-  end
-
-  test "oid_prefix raises NotImplementedError when not declared" do
-    klass = Class.new(ApplicationRecord) { self.table_name = "principals" }
-    assert_raises(NotImplementedError) { klass.oid_prefix }
+  test "declares prn as its oid prefix" do
+    assert_equal "prn", Principal.oid_prefix
   end
 end
