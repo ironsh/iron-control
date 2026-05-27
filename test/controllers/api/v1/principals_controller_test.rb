@@ -80,7 +80,7 @@ module Api
 
         data = json_body.fetch("data")
         assert_equal "Just a label", data["name"]
-        assert_nil data["namespace"]
+        assert_equal "default", data["namespace"]
         assert_nil data["foreign_id"]
       end
 

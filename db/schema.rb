@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_27_210955) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_27_211535) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -38,7 +38,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_210955) do
     t.string "foreign_id"
     t.jsonb "labels", default: {}, null: false
     t.string "name"
-    t.string "namespace"
+    t.string "namespace", default: "default", null: false
     t.datetime "updated_at", null: false
     t.index ["labels"], name: "index_principals_on_labels", using: :gin
     t.index ["namespace", "foreign_id"], name: "index_principals_on_namespace_and_foreign_id", unique: true
@@ -84,7 +84,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_210955) do
     t.jsonb "inject_config"
     t.jsonb "labels", default: {}, null: false
     t.string "name"
-    t.string "namespace"
+    t.string "namespace", default: "default", null: false
     t.jsonb "replace_config"
     t.datetime "updated_at", null: false
     t.index ["labels"], name: "index_static_secret_refs_on_labels", using: :gin
