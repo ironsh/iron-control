@@ -3,7 +3,7 @@ class AddCreatedByToApiResources < ActiveRecord::Migration[8.1]
 
   def change
     TABLES.each do |table|
-      add_reference table, :created_by, null: false, foreign_key: { to_table: :api_keys }
+      add_reference table, :created_by, null: false, foreign_key: { to_table: :users }
     end
   end
 end

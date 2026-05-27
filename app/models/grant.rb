@@ -5,5 +5,5 @@ class Grant < ApplicationRecord
 
   belongs_to :principal
   belongs_to :static_secret_ref
-  belongs_to :created_by, -> { unscoped }, class_name: "ApiKey"
+  belongs_to :created_by, class_name: "User"
 end

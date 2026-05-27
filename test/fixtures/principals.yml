@@ -4,14 +4,14 @@ acme_channel:
   labels:
     kind: slack_channel
     team: platform
-  created_by: acme_ci_key
+  created_by: acme_admin
 
 globex_user:
   namespace: globex
   foreign_id: U987654321
   labels:
     kind: user
-  created_by: globex_ci_key
+  created_by: globex_admin
 
 acme_user_alice:
   namespace: acme
@@ -19,7 +19,7 @@ acme_user_alice:
   labels:
     kind: user
     team: platform
-  created_by: acme_ci_key
+  created_by: acme_admin
 
 acme_user_bob:
   namespace: acme
@@ -27,7 +27,7 @@ acme_user_bob:
   labels:
     kind: user
     team: ops
-  created_by: acme_ci_key
+  created_by: acme_admin
 
 globex_user_overlap:
   namespace: globex
@@ -35,4 +35,4 @@ globex_user_overlap:
   labels:
     kind: user
     team: platform
-  created_by: globex_ci_key
+  created_by: globex_admin

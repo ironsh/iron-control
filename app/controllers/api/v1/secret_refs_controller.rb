@@ -12,7 +12,7 @@ module Api
       end
 
       def create
-        ref = StaticSecretRef.new(created_by: current_api_key)
+        ref = StaticSecretRef.new(created_by: current_user)
         upsert!(ref, data_params)
         render status: :created, json: { data: record_payload(ref) }
       rescue ActiveRecord::RecordInvalid => e

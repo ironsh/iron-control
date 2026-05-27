@@ -2,7 +2,7 @@ require "test_helper"
 
 class PrincipalTest < ActiveSupport::TestCase
   def default_attrs(overrides = {})
-    { created_by: api_keys(:acme_ci_key) }.merge(overrides)
+    { created_by: users(:acme_admin) }.merge(overrides)
   end
 
   test "is valid with namespace and foreign_id" do

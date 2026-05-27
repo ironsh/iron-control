@@ -5,7 +5,7 @@ class GrantTest < ActiveSupport::TestCase
     {
       principal: principals(:acme_channel),
       static_secret_ref: static_secret_refs(:github_token_inject),
-      created_by: api_keys(:acme_ci_key)
+      created_by: users(:acme_admin)
     }.merge(overrides)
   end
 

@@ -7,7 +7,7 @@ class StaticSecretRefTest < ActiveSupport::TestCase
       foreign_id: "new-ref",
       name: "a friendly name",
       inject_config: { "header" => "Authorization", "formatter" => "Bearer {{ .Value }}" },
-      created_by: api_keys(:acme_ci_key)
+      created_by: users(:acme_admin)
     }.merge(overrides)
   end
 
@@ -16,7 +16,7 @@ class StaticSecretRefTest < ActiveSupport::TestCase
       namespace: "acme",
       foreign_id: "new-ref",
       replace_config: { "proxy_value" => "__TOKEN__" },
-      created_by: api_keys(:acme_ci_key)
+      created_by: users(:acme_admin)
     }.merge(overrides)
   end
 
@@ -31,7 +31,7 @@ class StaticSecretRefTest < ActiveSupport::TestCase
   test "namespace defaults to 'default' and is valid with no foreign_id or name" do
     ref = StaticSecretRef.new(
       inject_config: { "header" => "Authorization" },
-      created_by: api_keys(:acme_ci_key)
+      created_by: users(:acme_admin)
     )
     assert_equal "default", ref.namespace
     assert ref.valid?, ref.errors.full_messages.inspect
@@ -76,7 +76,7 @@ class StaticSecretRefTest < ActiveSupport::TestCase
   end
 
   test "must define one of inject_config or replace_config" do
-    ref = StaticSecretRef.new(namespace: "acme", foreign_id: "neither", created_by: api_keys(:acme_ci_key))
+    ref = StaticSecretRef.new(namespace: "acme", foreign_id: "neither", created_by: users(:acme_admin))
     assert_not ref.valid?
     assert_includes ref.errors[:base], "must define one of inject_config or replace_config"
   end
@@ -87,7 +87,7 @@ class StaticSecretRefTest < ActiveSupport::TestCase
       foreign_id: "both",
       inject_config: { "header" => "Authorization" },
       replace_config: { "proxy_value" => "__TOKEN__" },
-      created_by: api_keys(:acme_ci_key)
+      created_by: users(:acme_admin)
     )
     assert_not ref.valid?
     assert_includes ref.errors[:base], "inject_config and replace_config are mutually exclusive"

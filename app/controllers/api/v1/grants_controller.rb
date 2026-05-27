@@ -14,7 +14,7 @@ module Api
         grant = Grant.create!(
           principal: principal,
           static_secret_ref: static_secret_ref,
-          created_by: current_api_key
+          created_by: current_user
         )
         render status: :created, json: serialize(grant)
       rescue ActiveRecord::RecordInvalid => e

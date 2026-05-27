@@ -108,12 +108,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_220001) do
   end
 
   add_foreign_key "api_keys", "users"
-  add_foreign_key "grants", "api_keys", column: "created_by_id"
   add_foreign_key "grants", "principals"
   add_foreign_key "grants", "static_secret_refs"
-  add_foreign_key "principals", "api_keys", column: "created_by_id"
+  add_foreign_key "grants", "users", column: "created_by_id"
+  add_foreign_key "principals", "users", column: "created_by_id"
   add_foreign_key "proxies", "principals"
   add_foreign_key "request_rules", "static_secret_refs"
   add_foreign_key "secret_sources", "static_secret_refs"
-  add_foreign_key "static_secret_refs", "api_keys", column: "created_by_id"
+  add_foreign_key "static_secret_refs", "users", column: "created_by_id"
 end
