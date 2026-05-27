@@ -1,0 +1,126 @@
+require "test_helper"
+
+module Api
+  module V1
+    class GrantsControllerTest < ActionDispatch::IntegrationTest
+      ACME_TOKEN = "iak_acme-ci-token".freeze
+
+      def auth_headers(token = ACME_TOKEN)
+        { "Authorization" => "Bearer #{token}", "Content-Type" => "application/json" }
+      end
+
+      def json_body
+        JSON.parse(response.body)
+      end
+
+      test "rejects requests without an Authorization header" do
+        get api_v1_grant_url(id: "grant_unknown")
+        assert_response :unauthorized
+        assert_equal "invalid or missing API key", json_body.dig("error", "message")
+      end
+
+      test "rejects requests with an unknown bearer token" do
+        get api_v1_grant_url(id: "grant_unknown"),
+            headers: auth_headers("iak_not-a-real-token")
+        assert_response :unauthorized
+      end
+
+      test "rejects requests with a malformed Authorization scheme" do
+        get api_v1_grant_url(id: "grant_unknown"),
+            headers: { "Authorization" => "Token #{ACME_TOKEN}" }
+        assert_response :unauthorized
+      end
+
+      test "GET returns a Grant with principal and secret ref OIDs" do
+        grant = grants(:acme_channel_github_token)
+
+        get api_v1_grant_url(id: grant.oid), headers: auth_headers
+        assert_response :ok
+
+        data = json_body.fetch("data")
+        assert_equal grant.oid, data["id"]
+        assert_equal grant.principal.oid, data["principal_id"]
+        assert_equal grant.static_secret_ref.oid, data["static_secret_ref_id"]
+      end
+
+      test "GET returns 404 for an unknown oid" do
+        get api_v1_grant_url(id: "grant_nope"), headers: auth_headers
+        assert_response :not_found
+      end
+
+      test "POST creates a Grant" do
+        principal = principals(:globex_user)
+        secret_ref = static_secret_refs(:github_token_inject)
+
+        body = {
+          data: {
+            principal_id: principal.oid,
+            static_secret_ref_id: secret_ref.oid
+          }
+        }
+
+        assert_difference -> { Grant.count } => 1 do
+          post api_v1_grants_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :created
+
+        data = json_body.fetch("data")
+        assert_match(/\Agrant_/, data["id"])
+        assert_equal principal.oid, data["principal_id"]
+        assert_equal secret_ref.oid, data["static_secret_ref_id"]
+      end
+
+      test "POST returns 404 when principal_id is unknown" do
+        secret_ref = static_secret_refs(:github_token_inject)
+        body = {
+          data: {
+            principal_id: "prn_nope",
+            static_secret_ref_id: secret_ref.oid
+          }
+        }
+
+        assert_no_difference -> { Grant.count } do
+          post api_v1_grants_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :not_found
+      end
+
+      test "POST returns 404 when static_secret_ref_id is unknown" do
+        principal = principals(:globex_user)
+        body = {
+          data: {
+            principal_id: principal.oid,
+            static_secret_ref_id: "ssr_nope"
+          }
+        }
+
+        assert_no_difference -> { Grant.count } do
+          post api_v1_grants_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :not_found
+      end
+
+      test "POST returns 400 when the data key is missing" do
+        post api_v1_grants_url, params: { principal_id: "prn_x" }.to_json, headers: auth_headers
+        assert_response :bad_request
+      end
+
+      test "DELETE removes the Grant" do
+        grant = grants(:acme_channel_github_token)
+
+        assert_difference -> { Grant.count } => -1 do
+          delete api_v1_grant_url(id: grant.oid), headers: auth_headers
+        end
+        assert_response :no_content
+
+        get api_v1_grant_url(id: grant.oid), headers: auth_headers
+        assert_response :not_found
+      end
+
+      test "DELETE returns 404 for an unknown oid" do
+        delete api_v1_grant_url(id: "grant_nope"), headers: auth_headers
+        assert_response :not_found
+      end
+    end
+  end
+end

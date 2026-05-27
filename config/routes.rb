@@ -16,6 +16,7 @@ Rails.application.routes.draw do
     namespace :v1 do
       resources :secret_refs, only: %i[show create update]
       resources :principals, only: %i[show create update]
+      resources :grants, only: %i[show create destroy]
     end
   end
 end
