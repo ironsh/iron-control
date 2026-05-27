@@ -1,4 +1,7 @@
 ENV["RAILS_ENV"] ||= "test"
+# Disable libpq's Kerberos/GSSAPI negotiation. On macOS this loads frameworks
+# that segfault when the test runner forks parallel workers.
+ENV["PGGSSENCMODE"] ||= "disable"
 require_relative "../config/environment"
 require "rails/test_help"
 

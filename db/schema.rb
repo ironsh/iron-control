@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_27_035805) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_27_044343) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -22,5 +22,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_035805) do
     t.datetime "updated_at", null: false
     t.index ["labels"], name: "index_principals_on_labels", using: :gin
     t.index ["namespace", "foreign_id"], name: "index_principals_on_namespace_and_foreign_id", unique: true
+  end
+
+  create_table "request_rules", force: :cascade do |t|
+    t.string "cidr"
+    t.datetime "created_at", null: false
+    t.string "host"
+    t.jsonb "http_methods", default: [], null: false
+    t.jsonb "paths", default: [], null: false
+    t.integer "position", null: false
+    t.datetime "updated_at", null: false
+    t.index ["host"], name: "index_request_rules_on_host"
+    t.index ["position"], name: "index_request_rules_on_position", unique: true
+  end
+
+  create_table "secret_sources", force: :cascade do |t|
+    t.jsonb "config", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.string "source_type", null: false
+    t.datetime "updated_at", null: false
+    t.index ["source_type"], name: "index_secret_sources_on_source_type"
   end
 end
