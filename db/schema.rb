@@ -53,7 +53,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_171533) do
     t.string "description"
     t.jsonb "inject_config"
     t.jsonb "labels", default: {}, null: false
-    t.jsonb "metadata", default: {}, null: false
     t.string "name", null: false
     t.string "namespace", null: false
     t.jsonb "replace_config"

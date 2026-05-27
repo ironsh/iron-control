@@ -67,18 +67,6 @@ class StaticSecretRefTest < ActiveSupport::TestCase
     assert_equal({}, ref.reload.labels)
   end
 
-  test "metadata defaults to empty hash" do
-    ref = StaticSecretRef.create!(valid_inject_attrs(name: "default-metadata"))
-    assert_equal({}, ref.reload.metadata)
-  end
-
-  test "metadata over 4KB is rejected" do
-    big = { "k" => "x" * 5000 }
-    ref = StaticSecretRef.new(valid_inject_attrs(metadata: big))
-    assert_not ref.valid?
-    assert ref.errors[:metadata].any? { |m| m.include?("4096 bytes") }
-  end
-
   test "must define one of inject_config or replace_config" do
     ref = StaticSecretRef.new(namespace: "centaur", name: "neither")
     assert_not ref.valid?

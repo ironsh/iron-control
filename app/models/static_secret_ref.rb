@@ -2,7 +2,6 @@ class StaticSecretRef < ApplicationRecord
   oid_prefix "ssc"
 
   NAME_FORMAT = /\A[a-zA-Z0-9_-]+\z/
-  METADATA_MAX_BYTES = 4096
 
   INJECT_CONFIG_SCHEMA = JSONSchemer.schema({
     "type" => "object",
@@ -41,8 +40,6 @@ class StaticSecretRef < ApplicationRecord
             uniqueness: { scope: :namespace },
             format: { with: NAME_FORMAT, message: "may only contain letters, numbers, underscores, and hyphens" }
   validate :labels_is_a_hash
-  validate :metadata_is_a_hash
-  validate :metadata_within_size_limit
   validate :exactly_one_of_inject_or_replace
   validate :inject_config_matches_schema
   validate :replace_config_matches_schema
@@ -51,17 +48,6 @@ class StaticSecretRef < ApplicationRecord
 
   def labels_is_a_hash
     errors.add(:labels, "must be a hash") unless labels.is_a?(Hash)
-  end
-
-  def metadata_is_a_hash
-    errors.add(:metadata, "must be a hash") unless metadata.is_a?(Hash)
-  end
-
-  def metadata_within_size_limit
-    return unless metadata.is_a?(Hash)
-    if metadata.to_json.bytesize > METADATA_MAX_BYTES
-      errors.add(:metadata, "must be at most #{METADATA_MAX_BYTES} bytes when serialized as JSON")
-    end
   end
 
   def exactly_one_of_inject_or_replace

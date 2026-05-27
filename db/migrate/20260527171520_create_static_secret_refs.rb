@@ -5,7 +5,6 @@ class CreateStaticSecretRefs < ActiveRecord::Migration[8.1]
       t.string :name, null: false
       t.string :description
       t.jsonb :labels, null: false, default: {}
-      t.jsonb :metadata, null: false, default: {}
       t.jsonb :inject_config
       t.jsonb :replace_config
 
