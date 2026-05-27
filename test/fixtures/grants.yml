@@ -1,0 +1,7 @@
+centaur_channel_github_token:
+  principal: centaur_channel
+  static_secret_ref: github_token_inject
+
+centaur_channel_db_password:
+  principal: centaur_channel
+  static_secret_ref: db_password_replace
