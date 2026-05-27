@@ -18,7 +18,6 @@ module Iron
       supplied_token = ENV["IRON_BOOT_INITIAL_API_KEY"].to_s
 
       return unless ActiveRecord::Base.connection.data_source_exists?("users")
-      return if User.exists?
 
       ActiveRecord::Base.transaction do
         ActiveRecord::Base.connection.execute("SELECT pg_advisory_xact_lock(#{ADVISORY_LOCK_KEY})")
