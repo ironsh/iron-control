@@ -39,10 +39,14 @@ module OpaqueId
       return nil unless decoded.length == 1
 
       id = decoded.first
-      # Round-trip guard: Sqids accepts some non-canonical strings; require canonical form.
+      # Round-trip guard: Sqids accepts some non-canonical strings, and can decode
+      # malformed input to numbers outside its encodable range (which makes encode
+      # raise ArgumentError). Either way, treat as not-a-real-oid.
       return nil unless oid_encoder.encode([ id ]) == encoded
 
       id
+    rescue ArgumentError
+      nil
     end
 
     def find_by_oid(value)
