@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_27_182421) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_27_194107) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -31,6 +31,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_182421) do
     t.datetime "updated_at", null: false
     t.index ["labels"], name: "index_principals_on_labels", using: :gin
     t.index ["namespace", "foreign_id"], name: "index_principals_on_namespace_and_foreign_id", unique: true
+  end
+
+  create_table "proxies", force: :cascade do |t|
+    t.string "bearer_token_hash", null: false
+    t.datetime "created_at", null: false
+    t.string "name", null: false
+    t.bigint "principal_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["principal_id"], name: "index_proxies_on_principal_id"
   end
 
   create_table "request_rules", force: :cascade do |t|
@@ -72,6 +81,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_182421) do
 
   add_foreign_key "grants", "principals"
   add_foreign_key "grants", "static_secret_refs"
+  add_foreign_key "proxies", "principals"
   add_foreign_key "request_rules", "static_secret_refs"
   add_foreign_key "secret_sources", "static_secret_refs"
 end

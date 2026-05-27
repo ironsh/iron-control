@@ -3,7 +3,7 @@ require "test_helper"
 class StaticSecretRefTest < ActiveSupport::TestCase
   def valid_inject_attrs(overrides = {})
     {
-      namespace: "centaur",
+      namespace: "acme",
       name: "new-ref",
       inject_config: { "header" => "Authorization", "formatter" => "Bearer {{ .Value }}" }
     }.merge(overrides)
@@ -11,7 +11,7 @@ class StaticSecretRefTest < ActiveSupport::TestCase
 
   def valid_replace_attrs(overrides = {})
     {
-      namespace: "centaur",
+      namespace: "acme",
       name: "new-ref",
       replace_config: { "proxy_value" => "__TOKEN__" }
     }.merge(overrides)
@@ -46,7 +46,7 @@ class StaticSecretRefTest < ActiveSupport::TestCase
 
   test "same name is allowed across different namespaces" do
     existing = static_secret_refs(:github_token_inject)
-    other = StaticSecretRef.new(valid_inject_attrs(namespace: "traceforce", name: existing.name))
+    other = StaticSecretRef.new(valid_inject_attrs(namespace: "globex", name: existing.name))
     assert other.valid?
   end
 
@@ -68,14 +68,14 @@ class StaticSecretRefTest < ActiveSupport::TestCase
   end
 
   test "must define one of inject_config or replace_config" do
-    ref = StaticSecretRef.new(namespace: "centaur", name: "neither")
+    ref = StaticSecretRef.new(namespace: "acme", name: "neither")
     assert_not ref.valid?
     assert_includes ref.errors[:base], "must define one of inject_config or replace_config"
   end
 
   test "cannot define both inject_config and replace_config" do
     ref = StaticSecretRef.new(
-      namespace: "centaur",
+      namespace: "acme",
       name: "both",
       inject_config: { "header" => "Authorization" },
       replace_config: { "proxy_value" => "__TOKEN__" }

@@ -3,13 +3,13 @@ require "test_helper"
 class GrantTest < ActiveSupport::TestCase
   def valid_attrs(overrides = {})
     {
-      principal: principals(:centaur_channel),
+      principal: principals(:acme_channel),
       static_secret_ref: static_secret_refs(:github_token_inject)
     }.merge(overrides)
   end
 
   test "is valid with principal and static_secret_ref" do
-    grant = Grant.new(valid_attrs(principal: principals(:traceforce_user)))
+    grant = Grant.new(valid_attrs(principal: principals(:globex_user)))
     assert grant.valid?
   end
 
@@ -26,14 +26,14 @@ class GrantTest < ActiveSupport::TestCase
   end
 
   test "principal is immutable after creation" do
-    grant = grants(:centaur_channel_github_token)
+    grant = grants(:acme_channel_github_token)
     assert_raises(ActiveRecord::ReadonlyAttributeError) do
-      grant.update!(principal: principals(:traceforce_user))
+      grant.update!(principal: principals(:globex_user))
     end
   end
 
   test "static_secret_ref is immutable after creation" do
-    grant = grants(:centaur_channel_github_token)
+    grant = grants(:acme_channel_github_token)
     other = static_secret_refs(:db_password_replace)
     assert_raises(ActiveRecord::ReadonlyAttributeError) do
       grant.update!(static_secret_ref: other)
@@ -41,7 +41,7 @@ class GrantTest < ActiveSupport::TestCase
   end
 
   test "destroyed when principal is destroyed" do
-    principal = principals(:centaur_channel)
+    principal = principals(:acme_channel)
     grant_ids = principal.grants.pluck(:id)
     assert_not_empty grant_ids
     principal.destroy!
@@ -61,7 +61,7 @@ class GrantTest < ActiveSupport::TestCase
   end
 
   test "find_by_oid round-trips" do
-    grant = grants(:centaur_channel_github_token)
+    grant = grants(:acme_channel_github_token)
     assert_equal grant, Grant.find_by_oid(grant.oid)
   end
 end

@@ -1,0 +1,10 @@
+acme_proxy:
+  name: acme-prod-proxy
+  principal: acme_channel
+  bearer_token_hash: <%= Digest::SHA256.hexdigest("acme-token") %>
+
+globex_proxy:
+  name: globex-staging-proxy
+  principal: globex_user
+  bearer_token_hash: <%= Digest::SHA256.hexdigest("globex-token") %>
+
