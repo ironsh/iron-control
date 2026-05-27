@@ -31,16 +31,14 @@ module Iron
           api_key.token = supplied_token
           api_key.token_hash = ApiKey.hash_token(supplied_token)
         end
-        begin
-          api_key.save!
-        rescue ActiveRecord::RecordInvalid => e
-          raise Error, "IRON_BOOT_INITIAL_API_KEY invalid: #{e.record.errors.full_messages.join(", ")}"
-        end
+        api_key.save!
 
         log_line = "iron-control bootstrap: created user id=#{user.id} email=#{user.email} api_key_id=#{api_key.id}"
         log_line += " api_key=#{api_key.token}" if supplied_token.empty?
         logger.info(log_line)
       end
+    rescue ActiveRecord::RecordInvalid => e
+      raise Error, "iron-control bootstrap failed: #{e.record.class.name.downcase} #{e.record.errors.full_messages.join(", ")}"
     end
   end
 end
