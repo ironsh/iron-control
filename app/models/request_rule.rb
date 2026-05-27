@@ -20,7 +20,8 @@ class RequestRule < ApplicationRecord
 
   def assign_position
     return if position.present?
-    self.position = (self.class.unscoped.maximum(:position) || 0) + 1
+    max = self.class.unscoped.maximum(:position)
+    self.position = max.nil? ? 0 : max + 1
   end
 
   def host_xor_cidr

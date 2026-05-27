@@ -79,12 +79,12 @@ class RequestRuleTest < ActiveSupport::TestCase
     assert_includes r.errors[:paths], "must be an array"
   end
 
-  test "position auto-assigns as max + 1" do
+  test "position starts at 0 and increments by 1" do
     RequestRule.delete_all
     a = RequestRule.create!(host: "a.example.com")
     b = RequestRule.create!(host: "b.example.com")
-    assert_equal 1, a.position
-    assert_equal 2, b.position
+    assert_equal 0, a.position
+    assert_equal 1, b.position
   end
 
   test "position uniqueness is enforced" do
