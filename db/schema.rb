@@ -30,10 +30,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_044343) do
     t.string "host"
     t.jsonb "http_methods", default: [], null: false
     t.jsonb "paths", default: [], null: false
-    t.integer "position", null: false
+    t.integer "position", default: 0, null: false
     t.datetime "updated_at", null: false
     t.index ["host"], name: "index_request_rules_on_host"
-    t.index ["position"], name: "index_request_rules_on_position", unique: true
+    t.index ["position"], name: "index_request_rules_on_position"
   end
 
   create_table "secret_sources", force: :cascade do |t|

@@ -8,21 +8,13 @@ class RequestRule < ApplicationRecord
 
   default_scope { order(:position) }
 
-  before_validation :assign_position, on: :create
-
-  validates :position, presence: true, numericality: { only_integer: true }, uniqueness: true
+  validates :position, presence: true, numericality: { only_integer: true }
   validate :host_xor_cidr
   validate :cidr_is_valid
   validate :http_methods_are_valid
   validate :paths_are_valid
 
   private
-
-  def assign_position
-    return if position.present?
-    max = self.class.unscoped.maximum(:position)
-    self.position = max.nil? ? 0 : max + 1
-  end
 
   def host_xor_cidr
     if host.present? && cidr.present?

@@ -79,25 +79,24 @@ class RequestRuleTest < ActiveSupport::TestCase
     assert_includes r.errors[:paths], "must be an array"
   end
 
-  test "position starts at 0 and increments by 1" do
+  test "position defaults to 0 when not set" do
     RequestRule.delete_all
     a = RequestRule.create!(host: "a.example.com")
-    b = RequestRule.create!(host: "b.example.com")
     assert_equal 0, a.position
-    assert_equal 1, b.position
   end
 
-  test "position uniqueness is enforced" do
-    existing = request_rules(:api_host)
-    dup = RequestRule.new(host: "other.example.com", position: existing.position)
-    assert_not dup.valid?
-    assert_includes dup.errors[:position], "has already been taken"
+  test "explicit position is respected" do
+    RequestRule.delete_all
+    a = RequestRule.create!(host: "a.example.com", position: 5)
+    assert_equal 5, a.position
   end
 
   test "default_scope orders by position" do
-    ordered = RequestRule.all.to_a
-    positions = ordered.map(&:position)
-    assert_equal positions.sort, positions
+    RequestRule.delete_all
+    c = RequestRule.create!(host: "c.example.com", position: 2)
+    a = RequestRule.create!(host: "a.example.com", position: 0)
+    b = RequestRule.create!(host: "b.example.com", position: 1)
+    assert_equal [ a, b, c ], RequestRule.all.to_a
   end
 
   test "declares rqr as its oid prefix" do
