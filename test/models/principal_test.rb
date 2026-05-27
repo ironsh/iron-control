@@ -6,16 +6,12 @@ class PrincipalTest < ActiveSupport::TestCase
     assert principal.valid?
   end
 
-  test "requires namespace" do
-    principal = Principal.new(foreign_id: "C-new-1")
-    assert_not principal.valid?
-    assert_includes principal.errors[:namespace], "can't be blank"
+  test "is valid with no namespace or foreign_id" do
+    assert Principal.new.valid?
   end
 
-  test "requires foreign_id" do
-    principal = Principal.new(namespace: "acme")
-    assert_not principal.valid?
-    assert_includes principal.errors[:foreign_id], "can't be blank"
+  test "is valid with only a name" do
+    assert Principal.new(name: "Just a label").valid?
   end
 
   test "foreign_id is unique within a namespace" do
@@ -63,6 +59,12 @@ class PrincipalTest < ActiveSupport::TestCase
     principal = principals(:acme_channel)
     principal.update!(labels: { "changed" => "yes" })
     assert_equal({ "changed" => "yes" }, principal.reload.labels)
+  end
+
+  test "name is editable after creation" do
+    principal = principals(:acme_channel)
+    principal.update!(name: "Acme Slack channel")
+    assert_equal "Acme Slack channel", principal.reload.name
   end
 
   test "declares prn as its oid prefix" do

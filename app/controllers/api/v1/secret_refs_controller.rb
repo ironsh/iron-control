@@ -31,7 +31,7 @@ module Api
 
       def upsert!(ref, attrs)
         ssr_attrs = attrs.permit(
-          :namespace, :name, :description,
+          :namespace, :foreign_id, :name, :description,
           labels: {}, inject_config: {}, replace_config: {}
         )
 
@@ -67,6 +67,7 @@ module Api
         {
           id: ref.oid,
           namespace: ref.namespace,
+          foreign_id: ref.foreign_id,
           name: ref.name,
           description: ref.description,
           labels: ref.labels,

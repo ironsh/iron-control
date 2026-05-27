@@ -70,14 +70,28 @@ module Api
         assert_equal({ "kind" => "user", "team" => "platform" }, data["labels"])
       end
 
-      test "POST returns 422 when namespace is missing" do
-        body = { data: { foreign_id: "U-no-namespace" } }
+      test "POST creates a Principal with only a human-readable name" do
+        body = { data: { name: "Just a label" } }
 
-        assert_no_difference -> { Principal.count } do
+        assert_difference -> { Principal.count } => 1 do
           post api_v1_principals_url, params: body.to_json, headers: auth_headers
         end
-        assert_response :unprocessable_content
-        assert_equal "validation failed", json_body.dig("error", "message")
+        assert_response :created
+
+        data = json_body.fetch("data")
+        assert_equal "Just a label", data["name"]
+        assert_nil data["namespace"]
+        assert_nil data["foreign_id"]
+      end
+
+      test "PUT updates the human-readable name" do
+        principal = principals(:acme_channel)
+        body = { data: { name: "Acme Slack channel" } }
+
+        put api_v1_principal_url(id: principal.oid), params: body.to_json, headers: auth_headers
+        assert_response :ok
+
+        assert_equal "Acme Slack channel", principal.reload.name
       end
 
       test "POST returns 422 when (namespace, foreign_id) already exists" do

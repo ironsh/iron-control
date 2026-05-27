@@ -19,7 +19,7 @@ module Api
       end
 
       def create
-        principal = Principal.new(data_params.permit(:namespace, :foreign_id, labels: {}))
+        principal = Principal.new(data_params.permit(:namespace, :foreign_id, :name, labels: {}))
         principal.save!
         render status: :created, json: { data: record_payload(principal) }
       rescue ActiveRecord::RecordInvalid => e
@@ -28,7 +28,7 @@ module Api
 
       def update
         principal = Principal.find_by_oid!(params[:id])
-        principal.update!(data_params.permit(labels: {}))
+        principal.update!(data_params.permit(:name, labels: {}))
         render json: { data: record_payload(principal) }
       rescue ActiveRecord::RecordInvalid => e
         render_validation_error(e.record)
@@ -41,6 +41,7 @@ module Api
           id: principal.oid,
           namespace: principal.namespace,
           foreign_id: principal.foreign_id,
+          name: principal.name,
           labels: principal.labels,
           created_at: principal.created_at,
           updated_at: principal.updated_at

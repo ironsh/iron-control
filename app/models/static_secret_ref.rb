@@ -3,7 +3,8 @@ class StaticSecretRef < ApplicationRecord
 
   has_many :grants, dependent: :destroy
 
-  NAME_FORMAT = /\A[a-zA-Z0-9_-]+\z/
+  URL_SAFE_FORMAT = /\A[A-Za-z0-9\-._~]+\z/
+  URL_SAFE_MESSAGE = "must contain only URL-safe characters (A-Z, a-z, 0-9, -, ., _, ~)"
 
   INJECT_CONFIG_SCHEMA = JSONSchemer.schema({
     "type" => "object",
@@ -36,11 +37,9 @@ class StaticSecretRef < ApplicationRecord
   has_one :source, class_name: "SecretSource", dependent: :destroy
   has_many :rules, class_name: "RequestRule", dependent: :destroy
 
-  validates :namespace, presence: true
-  validates :name,
-            presence: true,
-            uniqueness: { scope: :namespace },
-            format: { with: NAME_FORMAT, message: "may only contain letters, numbers, underscores, and hyphens" }
+  validates :namespace, format: { with: URL_SAFE_FORMAT, message: URL_SAFE_MESSAGE }, allow_nil: true
+  validates :foreign_id, uniqueness: { scope: :namespace, allow_nil: true },
+            format: { with: URL_SAFE_FORMAT, message: URL_SAFE_MESSAGE }, allow_nil: true
   validate :labels_is_a_hash
   validate :exactly_one_of_inject_or_replace
   validate :inject_config_matches_schema

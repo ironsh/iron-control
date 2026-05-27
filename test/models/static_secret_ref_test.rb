@@ -4,7 +4,8 @@ class StaticSecretRefTest < ActiveSupport::TestCase
   def valid_inject_attrs(overrides = {})
     {
       namespace: "acme",
-      name: "new-ref",
+      foreign_id: "new-ref",
+      name: "a friendly name",
       inject_config: { "header" => "Authorization", "formatter" => "Bearer {{ .Value }}" }
     }.merge(overrides)
   end
@@ -12,7 +13,7 @@ class StaticSecretRefTest < ActiveSupport::TestCase
   def valid_replace_attrs(overrides = {})
     {
       namespace: "acme",
-      name: "new-ref",
+      foreign_id: "new-ref",
       replace_config: { "proxy_value" => "__TOKEN__" }
     }.merge(overrides)
   end
@@ -25,50 +26,47 @@ class StaticSecretRefTest < ActiveSupport::TestCase
     assert StaticSecretRef.new(valid_replace_attrs).valid?
   end
 
-  test "requires namespace" do
-    ref = StaticSecretRef.new(valid_inject_attrs(namespace: nil))
-    assert_not ref.valid?
-    assert_includes ref.errors[:namespace], "can't be blank"
+  test "is valid with no namespace, foreign_id, or name" do
+    ref = StaticSecretRef.new(
+      inject_config: { "header" => "Authorization" }
+    )
+    assert ref.valid?, ref.errors.full_messages.inspect
   end
 
-  test "requires name" do
-    ref = StaticSecretRef.new(valid_inject_attrs(name: nil))
-    assert_not ref.valid?
-    assert_includes ref.errors[:name], "can't be blank"
+  test "name is free-form and accepts arbitrary characters" do
+    ref = StaticSecretRef.new(valid_inject_attrs(name: "Anything goes! 1/2, ümlaut."))
+    assert ref.valid?, ref.errors.full_messages.inspect
   end
 
-  test "name is unique within a namespace" do
-    existing = static_secret_refs(:github_token_inject)
-    dup = StaticSecretRef.new(valid_inject_attrs(namespace: existing.namespace, name: existing.name))
+  test "foreign_id is unique within a namespace" do
+    existing_attrs = valid_inject_attrs(foreign_id: "shared-fid")
+    StaticSecretRef.create!(existing_attrs)
+    dup = StaticSecretRef.new(existing_attrs.merge(name: "another label"))
     assert_not dup.valid?
-    assert_includes dup.errors[:name], "has already been taken"
+    assert_includes dup.errors[:foreign_id], "has already been taken"
   end
 
-  test "same name is allowed across different namespaces" do
-    existing = static_secret_refs(:github_token_inject)
-    other = StaticSecretRef.new(valid_inject_attrs(namespace: "globex", name: existing.name))
+  test "same foreign_id is allowed across different namespaces" do
+    StaticSecretRef.create!(valid_inject_attrs(foreign_id: "shared-fid"))
+    other = StaticSecretRef.new(valid_inject_attrs(namespace: "globex", foreign_id: "shared-fid"))
     assert other.valid?
   end
 
-  test "name accepts letters, numbers, underscores, and hyphens" do
-    assert StaticSecretRef.new(valid_inject_attrs(name: "Abc_123-xyz")).valid?
-  end
-
-  test "name rejects disallowed characters" do
-    %w[has.dot has/slash has\ space ümlaut].each do |bad|
-      ref = StaticSecretRef.new(valid_inject_attrs(name: bad))
+  test "foreign_id rejects non-URL-safe characters" do
+    %w[has/slash has\ space].each do |bad|
+      ref = StaticSecretRef.new(valid_inject_attrs(foreign_id: bad))
       assert_not ref.valid?, "expected #{bad.inspect} to be invalid"
-      assert ref.errors[:name].any? { |m| m.include?("may only contain") }
+      assert ref.errors[:foreign_id].any? { |m| m.include?("URL-safe") }
     end
   end
 
   test "labels defaults to empty hash" do
-    ref = StaticSecretRef.create!(valid_inject_attrs(name: "default-labels"))
+    ref = StaticSecretRef.create!(valid_inject_attrs(foreign_id: "default-labels"))
     assert_equal({}, ref.reload.labels)
   end
 
   test "must define one of inject_config or replace_config" do
-    ref = StaticSecretRef.new(namespace: "acme", name: "neither")
+    ref = StaticSecretRef.new(namespace: "acme", foreign_id: "neither")
     assert_not ref.valid?
     assert_includes ref.errors[:base], "must define one of inject_config or replace_config"
   end
@@ -76,7 +74,7 @@ class StaticSecretRefTest < ActiveSupport::TestCase
   test "cannot define both inject_config and replace_config" do
     ref = StaticSecretRef.new(
       namespace: "acme",
-      name: "both",
+      foreign_id: "both",
       inject_config: { "header" => "Authorization" },
       replace_config: { "proxy_value" => "__TOKEN__" }
     )
