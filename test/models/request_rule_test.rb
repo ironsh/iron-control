@@ -63,12 +63,12 @@ class RequestRuleTest < ActiveSupport::TestCase
   end
 
   test "accepts path with leading slash" do
-    r = RequestRule.new(host: "x", paths: ["/v1/*"])
+    r = RequestRule.new(host: "x", paths: [ "/v1/*" ])
     assert r.valid?
   end
 
   test "rejects path without leading slash" do
-    r = RequestRule.new(host: "x", paths: ["v1/*"])
+    r = RequestRule.new(host: "x", paths: [ "v1/*" ])
     assert_not r.valid?
     assert r.errors[:paths].any? { |m| m.include?("v1/*") }
   end
