@@ -36,6 +36,7 @@ class StaticSecretRef < ApplicationRecord
 
   has_one :source, class_name: "SecretSource", dependent: :destroy
   has_many :rules, class_name: "RequestRule", dependent: :destroy
+  belongs_to :created_by, class_name: "User"
 
   validates :namespace, presence: true, format: { with: URL_SAFE_FORMAT, message: URL_SAFE_MESSAGE }
   validates :foreign_id, uniqueness: { scope: :namespace, allow_nil: true },

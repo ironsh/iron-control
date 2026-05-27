@@ -18,7 +18,11 @@ class OpaqueIdTest < ActiveSupport::TestCase
   end
 
   def create_record(klass = PrnModel)
-    klass.create!(namespace: "test", foreign_id: "f-#{SecureRandom.hex(6)}")
+    klass.create!(
+      namespace: "test",
+      foreign_id: "f-#{SecureRandom.hex(6)}",
+      created_by_id: users(:acme_admin).id
+    )
   end
 
   test "oid_prefix returns the declared prefix" do

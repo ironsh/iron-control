@@ -60,4 +60,20 @@ class ApiKeyTest < ActiveSupport::TestCase
     key = api_keys(:acme_ci_key)
     assert_equal key, ApiKey.find_by_oid(key.oid)
   end
+
+  test "soft_delete! sets deleted_at and excludes from default scope" do
+    key = ApiKey.create!(valid_attrs(user: users(:globex_admin)))
+    key.soft_delete!
+    assert key.deleted?
+    assert_not_nil key.deleted_at
+    assert_nil ApiKey.find_by(id: key.id)
+    assert_equal key, ApiKey.unscoped.find_by(id: key.id)
+  end
+
+  test "find_by_token skips soft-deleted keys" do
+    key = ApiKey.create!(valid_attrs(user: users(:globex_admin)))
+    plaintext = key.token
+    key.soft_delete!
+    assert_nil ApiKey.find_by_token(plaintext)
+  end
 end

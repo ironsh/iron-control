@@ -11,7 +11,11 @@ module Api
         principal = Principal.find_by_oid!(attrs[:principal_id])
         static_secret_ref = StaticSecretRef.find_by_oid!(attrs[:static_secret_ref_id])
 
-        grant = Grant.create!(principal: principal, static_secret_ref: static_secret_ref)
+        grant = Grant.create!(
+          principal: principal,
+          static_secret_ref: static_secret_ref,
+          created_by: current_user
+        )
         render status: :created, json: serialize(grant)
       rescue ActiveRecord::RecordInvalid => e
         render_validation_error(e.record)

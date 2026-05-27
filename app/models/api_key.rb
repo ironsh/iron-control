@@ -8,6 +8,8 @@ class ApiKey < ApplicationRecord
 
   belongs_to :user
 
+  default_scope { where(deleted_at: nil) }
+
   validates :name, presence: true
   validates :token_hash, presence: true, uniqueness: true
 
@@ -20,6 +22,14 @@ class ApiKey < ApplicationRecord
 
   def self.hash_token(plaintext)
     Digest::SHA256.hexdigest(plaintext)
+  end
+
+  def soft_delete!(at: Time.current)
+    update_column(:deleted_at, at)
+  end
+
+  def deleted?
+    deleted_at.present?
   end
 
   private
