@@ -2,8 +2,6 @@ module Iron
   module Bootstrap
     ADVISORY_LOCK_KEY = 0x1700_B007_C0FFEE & 0x7FFF_FFFF_FFFF_FFFF
 
-    API_KEY_FORMAT = /\Aiak_[0-9a-f]{64}\z/
-
     Error = Class.new(StandardError)
 
     module_function
@@ -18,9 +16,6 @@ module Iron
       end
 
       supplied_token = ENV["IRON_BOOT_INITIAL_API_KEY"].to_s
-      if !supplied_token.empty? && supplied_token !~ API_KEY_FORMAT
-        raise Error, "IRON_BOOT_INITIAL_API_KEY must match #{API_KEY_FORMAT.inspect} (iak_ + 32-byte lowercase hex)"
-      end
 
       return unless ActiveRecord::Base.connection.data_source_exists?("users")
       return if User.exists?
@@ -32,12 +27,14 @@ module Iron
         user = User.create!(email: email, password: password)
 
         api_key = ApiKey.new(user: user, name: "bootstrap")
-        if supplied_token.empty?
-          api_key.save!
-        else
+        unless supplied_token.empty?
           api_key.token = supplied_token
           api_key.token_hash = ApiKey.hash_token(supplied_token)
+        end
+        begin
           api_key.save!
+        rescue ActiveRecord::RecordInvalid => e
+          raise Error, "IRON_BOOT_INITIAL_API_KEY invalid: #{e.record.errors.full_messages.join(", ")}"
         end
 
         log_line = "iron-control bootstrap: created user id=#{user.id} email=#{user.email} api_key_id=#{api_key.id}"
