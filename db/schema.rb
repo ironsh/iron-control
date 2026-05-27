@@ -10,9 +10,19 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_27_194107) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_27_195244) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "api_keys", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "name", null: false
+    t.string "token_hash", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["token_hash"], name: "index_api_keys_on_token_hash", unique: true
+    t.index ["user_id"], name: "index_api_keys_on_user_id"
+  end
 
   create_table "grants", force: :cascade do |t|
     t.datetime "created_at", null: false
@@ -79,6 +89,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_194107) do
     t.index ["namespace", "name"], name: "index_static_secret_refs_on_namespace_and_name", unique: true
   end
 
+  create_table "users", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "email", null: false
+    t.string "password_digest", null: false
+    t.datetime "updated_at", null: false
+    t.index ["email"], name: "index_users_on_email", unique: true
+  end
+
+  add_foreign_key "api_keys", "users"
   add_foreign_key "grants", "principals"
   add_foreign_key "grants", "static_secret_refs"
   add_foreign_key "proxies", "principals"
