@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_27_044343) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_27_171533) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -31,16 +31,37 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_044343) do
     t.jsonb "http_methods", default: [], null: false
     t.jsonb "paths", default: [], null: false
     t.integer "position", default: 0, null: false
+    t.bigint "static_secret_ref_id"
     t.datetime "updated_at", null: false
     t.index ["host"], name: "index_request_rules_on_host"
     t.index ["position"], name: "index_request_rules_on_position"
+    t.index ["static_secret_ref_id"], name: "index_request_rules_on_static_secret_ref_id"
   end
 
   create_table "secret_sources", force: :cascade do |t|
     t.jsonb "config", default: {}, null: false
     t.datetime "created_at", null: false
     t.string "source_type", null: false
+    t.bigint "static_secret_ref_id"
     t.datetime "updated_at", null: false
     t.index ["source_type"], name: "index_secret_sources_on_source_type"
+    t.index ["static_secret_ref_id"], name: "index_secret_sources_on_static_secret_ref_id", unique: true
   end
+
+  create_table "static_secret_refs", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "description"
+    t.jsonb "inject_config"
+    t.jsonb "labels", default: {}, null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.string "name", null: false
+    t.string "namespace", null: false
+    t.jsonb "replace_config"
+    t.datetime "updated_at", null: false
+    t.index ["labels"], name: "index_static_secret_refs_on_labels", using: :gin
+    t.index ["namespace", "name"], name: "index_static_secret_refs_on_namespace_and_name", unique: true
+  end
+
+  add_foreign_key "request_rules", "static_secret_refs"
+  add_foreign_key "secret_sources", "static_secret_refs"
 end

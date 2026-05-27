@@ -13,6 +13,8 @@ class SecretSource < ApplicationRecord
     "1password_connect" => { required: %w[secret_ref], optional: %w[host_env token_env] }
   }.freeze
 
+  belongs_to :static_secret_ref, optional: true
+
   attr_readonly :source_type
 
   validates :source_type, presence: true, inclusion: { in: SOURCE_TYPES }
