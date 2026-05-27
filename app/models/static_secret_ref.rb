@@ -33,8 +33,8 @@ class StaticSecretRef < ApplicationRecord
     }
   })
 
-  has_one :source, class_name: "SecretSource", dependent: :nullify
-  has_many :rules, class_name: "RequestRule", dependent: :nullify
+  has_one :source, class_name: "SecretSource", dependent: :destroy
+  has_many :rules, class_name: "RequestRule", dependent: :destroy
 
   validates :namespace, presence: true
   validates :name,
