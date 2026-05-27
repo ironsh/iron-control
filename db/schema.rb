@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_27_195244) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_27_210955) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -35,9 +35,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_195244) do
 
   create_table "principals", force: :cascade do |t|
     t.datetime "created_at", null: false
-    t.string "foreign_id", null: false
+    t.string "foreign_id"
     t.jsonb "labels", default: {}, null: false
-    t.string "namespace", null: false
+    t.string "name"
+    t.string "namespace"
     t.datetime "updated_at", null: false
     t.index ["labels"], name: "index_principals_on_labels", using: :gin
     t.index ["namespace", "foreign_id"], name: "index_principals_on_namespace_and_foreign_id", unique: true
@@ -79,14 +80,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_195244) do
   create_table "static_secret_refs", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "description"
+    t.string "foreign_id"
     t.jsonb "inject_config"
     t.jsonb "labels", default: {}, null: false
-    t.string "name", null: false
-    t.string "namespace", null: false
+    t.string "name"
+    t.string "namespace"
     t.jsonb "replace_config"
     t.datetime "updated_at", null: false
     t.index ["labels"], name: "index_static_secret_refs_on_labels", using: :gin
-    t.index ["namespace", "name"], name: "index_static_secret_refs_on_namespace_and_name", unique: true
+    t.index ["namespace", "foreign_id"], name: "index_static_secret_refs_on_namespace_and_foreign_id", unique: true
   end
 
   create_table "users", force: :cascade do |t|
