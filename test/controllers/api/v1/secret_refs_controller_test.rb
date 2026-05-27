@@ -211,6 +211,90 @@ module Api
             headers: auth_headers
         assert_response :not_found
       end
+
+      test "GET index rejects requests without an Authorization header" do
+        get api_v1_secret_refs_url, params: { namespace: "acme" }
+        assert_response :unauthorized
+      end
+
+      test "GET index returns 400 when namespace is missing" do
+        get api_v1_secret_refs_url, headers: auth_headers
+        assert_response :bad_request
+      end
+
+      test "GET index returns all secret_refs in a namespace" do
+        get api_v1_secret_refs_url, params: { namespace: "acme" }, headers: auth_headers
+        assert_response :ok
+
+        body = json_body
+        names = body.fetch("data").map { |r| r["name"] }
+        expected = StaticSecretRef.where(namespace: "acme").pluck(:name)
+        assert_equal expected.sort, names.sort
+        assert body["data"].all? { |r| r["namespace"] == "acme" }
+        assert_equal expected.length, body.dig("meta", "total")
+      end
+
+      test "GET index filters by a single label" do
+        get api_v1_secret_refs_url,
+            params: { namespace: "acme", labels: { env: "prod" } },
+            headers: auth_headers
+        assert_response :ok
+
+        names = json_body.fetch("data").map { |r| r["name"] }
+        assert_equal %w[prod-api-key], names
+      end
+
+      test "GET index ANDs multiple label filters" do
+        get api_v1_secret_refs_url,
+            params: { namespace: "acme", labels: { team: "platform", env: "staging" } },
+            headers: auth_headers
+        assert_response :ok
+
+        names = json_body.fetch("data").map { |r| r["name"] }
+        assert_equal %w[staging-api-key], names
+      end
+
+      test "GET index does not leak across namespaces" do
+        get api_v1_secret_refs_url,
+            params: { namespace: "acme", labels: { team: "platform", env: "prod" } },
+            headers: auth_headers
+        assert_response :ok
+
+        assert json_body.fetch("data").none? { |r| r["namespace"] == "globex" }
+        assert_equal %w[prod-api-key], json_body.fetch("data").map { |r| r["name"] }
+      end
+
+      test "GET index returns an empty array when no labels match" do
+        get api_v1_secret_refs_url,
+            params: { namespace: "acme", labels: { env: "nowhere" } },
+            headers: auth_headers
+        assert_response :ok
+        assert_equal [], json_body.fetch("data")
+      end
+
+      test "GET index honors limit and page" do
+        total = StaticSecretRef.where(namespace: "acme").count
+
+        get api_v1_secret_refs_url,
+            params: { namespace: "acme", limit: 1, page: 2 },
+            headers: auth_headers
+        assert_response :ok
+
+        body = json_body
+        assert_equal 1, body.fetch("data").length
+        assert_equal 1, body.dig("meta", "limit")
+        assert_equal 2, body.dig("meta", "page")
+        assert_equal total, body.dig("meta", "total")
+        assert_equal total, body.dig("meta", "total_pages")
+      end
+
+      test "GET index clamps limit above the max" do
+        get api_v1_secret_refs_url,
+            params: { namespace: "acme", limit: 9999 },
+            headers: auth_headers
+        assert_response :ok
+        assert_equal 200, json_body.dig("meta", "limit")
+      end
     end
   end
 end

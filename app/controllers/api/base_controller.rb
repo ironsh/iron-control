@@ -4,6 +4,7 @@ module Api
 
     rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
     rescue_from ActionController::ParameterMissing, with: :render_bad_request
+    rescue_from ActionController::BadRequest, with: :render_bad_request
 
     attr_reader :current_api_key
 
@@ -43,6 +44,59 @@ module Api
 
     def data_params
       params.require(:data)
+    end
+
+    DEFAULT_PAGE_LIMIT = 50
+    MAX_PAGE_LIMIT = 200
+
+    def paginated_label_search(scope)
+      namespace = params.require(:namespace)
+
+      labels = label_filter_params
+      filtered = scope.where(namespace: namespace)
+      filtered = filtered.where("labels @> ?", labels.to_json) if labels.any?
+
+      limit = pagination_limit
+      page = pagination_page
+      total = filtered.count
+      records = filtered.order(created_at: :asc, id: :asc).limit(limit).offset((page - 1) * limit)
+
+      total_pages = total.zero? ? 0 : ((total + limit - 1) / limit)
+      meta = { page: page, limit: limit, total: total, total_pages: total_pages }
+      [records, meta]
+    end
+
+    def label_filter_params
+      raw = params[:labels]
+      return {} if raw.blank?
+      unless raw.is_a?(ActionController::Parameters) || raw.is_a?(Hash)
+        raise ActionController::BadRequest, "labels must be a hash of key=value pairs"
+      end
+      hash = raw.respond_to?(:to_unsafe_h) ? raw.to_unsafe_h : raw.to_h
+      hash.each do |k, v|
+        unless v.is_a?(String) || v.is_a?(Numeric) || v == true || v == false
+          raise ActionController::BadRequest, "label value for #{k} must be a scalar"
+        end
+      end
+      hash
+    end
+
+    def pagination_limit
+      raw = params[:limit].presence
+      return DEFAULT_PAGE_LIMIT unless raw
+      n = Integer(raw, 10)
+      n.clamp(1, MAX_PAGE_LIMIT)
+    rescue ArgumentError, TypeError
+      raise ActionController::BadRequest, "limit must be an integer"
+    end
+
+    def pagination_page
+      raw = params[:page].presence
+      return 1 unless raw
+      n = Integer(raw, 10)
+      n < 1 ? 1 : n
+    rescue ArgumentError, TypeError
+      raise ActionController::BadRequest, "page must be an integer"
     end
   end
 end

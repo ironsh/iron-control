@@ -1,15 +1,27 @@
 module Api
   module V1
     class PrincipalsController < Api::BaseController
+      def index
+        records, meta = paginated_label_search(Principal.all)
+        render json: { data: records.map { |p| record_payload(p) }, meta: meta }
+      end
+
       def show
         principal = Principal.find_by_oid!(params[:id])
-        render json: serialize(principal)
+        render json: { data: record_payload(principal) }
+      end
+
+      def lookup
+        namespace = params.require(:namespace)
+        foreign_id = params.require(:foreign_id)
+        principal = Principal.find_by!(namespace: namespace, foreign_id: foreign_id)
+        render json: { data: record_payload(principal) }
       end
 
       def create
         principal = Principal.new(data_params.permit(:namespace, :foreign_id, labels: {}))
         principal.save!
-        render status: :created, json: serialize(principal)
+        render status: :created, json: { data: record_payload(principal) }
       rescue ActiveRecord::RecordInvalid => e
         render_validation_error(e.record)
       end
@@ -17,23 +29,21 @@ module Api
       def update
         principal = Principal.find_by_oid!(params[:id])
         principal.update!(data_params.permit(labels: {}))
-        render json: serialize(principal)
+        render json: { data: record_payload(principal) }
       rescue ActiveRecord::RecordInvalid => e
         render_validation_error(e.record)
       end
 
       private
 
-      def serialize(principal)
+      def record_payload(principal)
         {
-          data: {
-            id: principal.oid,
-            namespace: principal.namespace,
-            foreign_id: principal.foreign_id,
-            labels: principal.labels,
-            created_at: principal.created_at,
-            updated_at: principal.updated_at
-          }
+          id: principal.oid,
+          namespace: principal.namespace,
+          foreign_id: principal.foreign_id,
+          labels: principal.labels,
+          created_at: principal.created_at,
+          updated_at: principal.updated_at
         }
       end
 

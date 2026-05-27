@@ -14,8 +14,12 @@ Rails.application.routes.draw do
 
   namespace :api do
     namespace :v1 do
-      resources :secret_refs, only: %i[show create update]
-      resources :principals, only: %i[show create update]
+      resources :secret_refs, only: %i[index show create update]
+      resources :principals, only: %i[index show create update] do
+        collection do
+          get :lookup
+        end
+      end
       resources :grants, only: %i[show create destroy]
     end
   end

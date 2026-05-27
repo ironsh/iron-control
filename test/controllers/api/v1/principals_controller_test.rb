@@ -137,6 +137,138 @@ module Api
             headers: auth_headers
         assert_response :not_found
       end
+
+      test "GET index rejects requests without an Authorization header" do
+        get api_v1_principals_url, params: { namespace: "acme" }
+        assert_response :unauthorized
+      end
+
+      test "GET index returns 400 when namespace is missing" do
+        get api_v1_principals_url, headers: auth_headers
+        assert_response :bad_request
+      end
+
+      test "GET index returns all principals in a namespace" do
+        get api_v1_principals_url, params: { namespace: "acme" }, headers: auth_headers
+        assert_response :ok
+
+        body = json_body
+        ids = body.fetch("data").map { |p| p["id"] }
+        expected = Principal.where(namespace: "acme").pluck(:id).map { |id| Principal.find(id).oid }
+        assert_equal expected.sort, ids.sort
+        assert body["data"].all? { |p| p["namespace"] == "acme" }
+        assert_equal expected.length, body.dig("meta", "total")
+      end
+
+      test "GET index filters by a single label" do
+        get api_v1_principals_url,
+            params: { namespace: "acme", labels: { kind: "user" } },
+            headers: auth_headers
+        assert_response :ok
+
+        foreign_ids = json_body.fetch("data").map { |p| p["foreign_id"] }
+        assert_equal %w[U-alice U-bob].sort, foreign_ids.sort
+      end
+
+      test "GET index ANDs multiple label filters" do
+        get api_v1_principals_url,
+            params: { namespace: "acme", labels: { kind: "user", team: "platform" } },
+            headers: auth_headers
+        assert_response :ok
+
+        foreign_ids = json_body.fetch("data").map { |p| p["foreign_id"] }
+        assert_equal %w[U-alice], foreign_ids
+      end
+
+      test "GET index does not leak across namespaces" do
+        get api_v1_principals_url,
+            params: { namespace: "acme", labels: { kind: "user", team: "platform" } },
+            headers: auth_headers
+        assert_response :ok
+
+        assert json_body.fetch("data").none? { |p| p["namespace"] == "globex" }
+      end
+
+      test "GET index returns an empty array when no labels match" do
+        get api_v1_principals_url,
+            params: { namespace: "acme", labels: { kind: "nonexistent" } },
+            headers: auth_headers
+        assert_response :ok
+        assert_equal [], json_body.fetch("data")
+        assert_equal 0, json_body.dig("meta", "total")
+      end
+
+      test "GET index honors limit and page" do
+        get api_v1_principals_url,
+            params: { namespace: "acme", limit: 1, page: 2 },
+            headers: auth_headers
+        assert_response :ok
+
+        body = json_body
+        total = Principal.where(namespace: "acme").count
+        assert_equal 1, body.fetch("data").length
+        assert_equal 1, body.dig("meta", "limit")
+        assert_equal 2, body.dig("meta", "page")
+        assert_equal total, body.dig("meta", "total")
+        assert_equal total, body.dig("meta", "total_pages")
+      end
+
+      test "GET lookup finds a principal by namespace and foreign_id" do
+        principal = principals(:acme_channel)
+
+        get lookup_api_v1_principals_url,
+            params: { namespace: principal.namespace, foreign_id: principal.foreign_id },
+            headers: auth_headers
+        assert_response :ok
+
+        data = json_body.fetch("data")
+        assert_equal principal.oid, data["id"]
+        assert_equal principal.namespace, data["namespace"]
+        assert_equal principal.foreign_id, data["foreign_id"]
+      end
+
+      test "GET lookup returns 404 when no principal matches" do
+        get lookup_api_v1_principals_url,
+            params: { namespace: "acme", foreign_id: "U-does-not-exist" },
+            headers: auth_headers
+        assert_response :not_found
+      end
+
+      test "GET lookup returns 400 when namespace is missing" do
+        get lookup_api_v1_principals_url,
+            params: { foreign_id: "U-alice" },
+            headers: auth_headers
+        assert_response :bad_request
+      end
+
+      test "GET lookup returns 400 when foreign_id is missing" do
+        get lookup_api_v1_principals_url,
+            params: { namespace: "acme" },
+            headers: auth_headers
+        assert_response :bad_request
+      end
+
+      test "GET lookup rejects unauthenticated requests" do
+        get lookup_api_v1_principals_url,
+            params: { namespace: "acme", foreign_id: "U-alice" }
+        assert_response :unauthorized
+      end
+
+      test "GET lookup scopes by namespace" do
+        # globex_user_overlap and acme_user_alice both have similar labels but different namespaces
+        get lookup_api_v1_principals_url,
+            params: { namespace: "globex", foreign_id: "U-alice" },
+            headers: auth_headers
+        assert_response :not_found
+      end
+
+      test "GET index clamps limit above the max" do
+        get api_v1_principals_url,
+            params: { namespace: "acme", limit: 9999 },
+            headers: auth_headers
+        assert_response :ok
+        assert_equal 200, json_body.dig("meta", "limit")
+      end
     end
   end
 end
