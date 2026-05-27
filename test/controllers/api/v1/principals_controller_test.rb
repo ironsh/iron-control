@@ -216,8 +216,7 @@ module Api
       test "GET lookup finds a principal by namespace and foreign_id" do
         principal = principals(:acme_channel)
 
-        get lookup_api_v1_principals_url,
-            params: { namespace: principal.namespace, foreign_id: principal.foreign_id },
+        get lookup_api_v1_principals_url(namespace: principal.namespace, foreign_id: principal.foreign_id),
             headers: auth_headers
         assert_response :ok
 
@@ -228,38 +227,37 @@ module Api
       end
 
       test "GET lookup returns 404 when no principal matches" do
-        get lookup_api_v1_principals_url,
-            params: { namespace: "acme", foreign_id: "U-does-not-exist" },
+        get lookup_api_v1_principals_url(namespace: "acme", foreign_id: "U-does-not-exist"),
             headers: auth_headers
         assert_response :not_found
       end
 
-      test "GET lookup returns 400 when namespace is missing" do
-        get lookup_api_v1_principals_url,
-            params: { foreign_id: "U-alice" },
-            headers: auth_headers
-        assert_response :bad_request
-      end
-
-      test "GET lookup returns 400 when foreign_id is missing" do
-        get lookup_api_v1_principals_url,
-            params: { namespace: "acme" },
-            headers: auth_headers
-        assert_response :bad_request
-      end
-
       test "GET lookup rejects unauthenticated requests" do
-        get lookup_api_v1_principals_url,
-            params: { namespace: "acme", foreign_id: "U-alice" }
+        get lookup_api_v1_principals_url(namespace: "acme", foreign_id: "U-alice")
         assert_response :unauthorized
       end
 
       test "GET lookup scopes by namespace" do
         # globex_user_overlap and acme_user_alice both have similar labels but different namespaces
-        get lookup_api_v1_principals_url,
-            params: { namespace: "globex", foreign_id: "U-alice" },
+        get lookup_api_v1_principals_url(namespace: "globex", foreign_id: "U-alice"),
             headers: auth_headers
         assert_response :not_found
+      end
+
+      test "POST rejects a non-URL-safe foreign_id" do
+        body = { data: { namespace: "acme", foreign_id: "bad/value" } }
+        assert_no_difference -> { Principal.count } do
+          post api_v1_principals_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :unprocessable_content
+      end
+
+      test "POST rejects a non-URL-safe namespace" do
+        body = { data: { namespace: "acme corp", foreign_id: "U-ok" } }
+        assert_no_difference -> { Principal.count } do
+          post api_v1_principals_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :unprocessable_content
       end
 
       test "GET index clamps limit above the max" do

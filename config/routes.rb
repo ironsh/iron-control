@@ -17,7 +17,7 @@ Rails.application.routes.draw do
       resources :secret_refs, only: %i[index show create update]
       resources :principals, only: %i[index show create update] do
         collection do
-          get :lookup
+          get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup
         end
       end
       resources :grants, only: %i[show create destroy]
