@@ -1,0 +1,9 @@
+acme_ci_key:
+  user: acme_admin
+  name: ci
+  token_hash: <%= Digest::SHA256.hexdigest("iak_acme-ci-token") %>
+
+globex_ci_key:
+  user: globex_admin
+  name: ci
+  token_hash: <%= Digest::SHA256.hexdigest("iak_globex-ci-token") %>

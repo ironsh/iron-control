@@ -1,0 +1,7 @@
+acme_admin:
+  email: admin@acme.example
+  password_digest: <%= BCrypt::Password.create("password123456") %>
+
+globex_admin:
+  email: admin@globex.example
+  password_digest: <%= BCrypt::Password.create("password123456") %>
