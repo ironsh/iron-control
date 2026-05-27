@@ -10,3 +10,24 @@ globex_user:
   foreign_id: U987654321
   labels:
     kind: user
+
+acme_user_alice:
+  namespace: acme
+  foreign_id: U-alice
+  labels:
+    kind: user
+    team: platform
+
+acme_user_bob:
+  namespace: acme
+  foreign_id: U-bob
+  labels:
+    kind: user
+    team: ops
+
+globex_user_overlap:
+  namespace: globex
+  foreign_id: U-overlap
+  labels:
+    kind: user
+    team: platform
