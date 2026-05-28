@@ -288,6 +288,71 @@ module Api
         assert_equal total, body.dig("meta", "total_pages")
       end
 
+      test "POST creates a control_plane source with an encrypted secret and never returns it" do
+        body = {
+          data: {
+            namespace: "acme",
+            name: "control-plane-ref",
+            inject_config: { "header" => "Authorization" },
+            source: { source_type: "control_plane", secret: "plaintext-secret" }
+          }
+        }
+
+        assert_difference -> { StaticSecretRef.count } => 1,
+                          -> { SecretSource.count } => 1 do
+          post api_v1_secret_refs_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :created
+
+        data = json_body.fetch("data")
+        assert_equal "control_plane", data.dig("source", "source_type")
+        assert_not response.body.include?("plaintext-secret"), "secret must not appear in response"
+        assert_nil data.dig("source", "secret")
+
+        ref = StaticSecretRef.find_by_oid!(data["id"])
+        assert_equal "plaintext-secret", ref.source.secret
+
+        get api_v1_secret_ref_url(id: ref.oid), headers: auth_headers
+        assert_response :ok
+        assert_not response.body.include?("plaintext-secret"), "secret must not appear in GET response"
+      end
+
+      test "PUT rotates a control_plane source secret without exposing it" do
+        ref = static_secret_refs(:github_token_inject)
+        SecretSource.create!(source_type: "control_plane", secret: "old-secret", static_secret_ref: ref)
+
+        body = {
+          data: {
+            namespace: ref.namespace,
+            name: ref.name,
+            inject_config: { "header" => "Authorization" },
+            source: { source_type: "control_plane", secret: "new-secret" }
+          }
+        }
+
+        put api_v1_secret_ref_url(id: ref.oid), params: body.to_json, headers: auth_headers
+        assert_response :ok
+
+        assert_not response.body.include?("new-secret"), "rotated secret must not appear in response"
+        assert_equal "new-secret", ref.reload.source.secret
+      end
+
+      test "POST rejects a control_plane source without a secret" do
+        body = {
+          data: {
+            namespace: "acme",
+            name: "control-plane-no-secret",
+            inject_config: { "header" => "Authorization" },
+            source: { source_type: "control_plane" }
+          }
+        }
+
+        assert_no_difference [ "StaticSecretRef.count", "SecretSource.count" ] do
+          post api_v1_secret_refs_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :unprocessable_content
+      end
+
       test "GET index clamps limit above the max" do
         get api_v1_secret_refs_url,
             params: { namespace: "acme", limit: 9999 },

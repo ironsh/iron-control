@@ -37,7 +37,7 @@ module Api
         ssr_attrs[:namespace] = "default" if ref.new_record? && ssr_attrs[:namespace].blank?
 
         source_attrs = if attrs.key?(:source) && attrs[:source].present?
-          attrs.require(:source).permit(:source_type, config: {})
+          attrs.require(:source).permit(:source_type, :secret, config: {})
         end
 
         rules_attrs = Array(attrs[:rules]).map do |r|
