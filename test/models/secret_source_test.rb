@@ -36,9 +36,36 @@ class SecretSourceTest < ActiveSupport::TestCase
       config = required.each_with_object({}) { |k, h| h[k] = "x" }
       config["json_key"] = "password"
       config["ttl"] = "5m"
-      s = new_source(source_type: type, config: config)
+      attrs = { source_type: type, config: config }
+      attrs[:secret] = "v" if type == "control_plane"
+      s = new_source(attrs)
       assert s.valid?, "expected #{type} with json_key+ttl to be valid, got: #{s.errors.full_messages.inspect}"
     end
+  end
+
+  test "control_plane source is valid with a secret" do
+    s = new_source(source_type: "control_plane", secret: "supersecret")
+    assert s.valid?
+  end
+
+  test "control_plane source requires a secret" do
+    s = new_source(source_type: "control_plane")
+    assert_not s.valid?
+    assert s.errors[:secret].any? { |m| m.include?("can't be blank") }
+  end
+
+  test "non-control_plane source rejects a secret" do
+    s = new_source(source_type: "env", config: { "var" => "FOO" }, secret: "nope")
+    assert_not s.valid?
+    assert s.errors[:secret].any? { |m| m.include?("only allowed") }
+  end
+
+  test "control_plane source secret round-trips through encryption" do
+    ref = static_secret_refs(:github_token_inject)
+    s = SecretSource.create!(source_type: "control_plane", secret: "rotated-secret", static_secret_ref: ref)
+    assert_equal "rotated-secret", SecretSource.find(s.id).secret
+    raw = SecretSource.connection.select_value("SELECT secret FROM secret_sources WHERE id = #{s.id}")
+    assert_not_equal "rotated-secret", raw, "expected ciphertext, not plaintext, at rest"
   end
 
   test "requires source_type" do

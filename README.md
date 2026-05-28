@@ -17,3 +17,17 @@ Behavior:
 - Concurrent pods racing the first boot are serialized with a Postgres advisory lock; exactly one user is created.
 
 When deploying to Kubernetes, source these values from a `Secret`, not from a `ConfigMap`.
+
+## Encryption Keys
+
+`iron-control` uses ActiveRecord encryption to protect secrets stored in the control plane (for example, the `control_plane` secret source type). The following environment variables configure the encryption keys:
+
+| Variable                                 | Required           | Description                                  |
+| ---------------------------------------- | ------------------ | -------------------------------------------- |
+| `IRON_AR_ENCRYPTION_PRIMARY_KEY`         | yes (in production) | Primary key used for non-deterministic encryption. |
+| `IRON_AR_ENCRYPTION_DETERMINISTIC_KEY`   | yes (in production) | Key used for deterministic encryption.       |
+| `IRON_AR_ENCRYPTION_KEY_DERIVATION_SALT` | yes (in production) | Salt used to derive per-attribute keys.      |
+
+Generate suitable values with `bin/rails db:encryption:init` and store them in your secret manager. In production, the process refuses to boot if any of the three are missing. In `development` and `test`, fixed fallback values are used so the suite runs without configuration.
+
+Rotating any of these keys makes previously encrypted data unreadable. Treat them as long-lived secrets and back them up alongside other production credentials.
