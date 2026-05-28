@@ -21,6 +21,7 @@ Rails.application.routes.draw do
         end
       end
       resources :grants, only: %i[show create destroy]
+      resources :api_keys, only: %i[index show create destroy]
     end
   end
 end
