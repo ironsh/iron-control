@@ -1,18 +1,18 @@
 module Api
   module V1
-    class SecretRefsController < Api::BaseController
+    class StaticSecretsController < Api::BaseController
       def index
-        records, meta = paginated_label_search(StaticSecretRef.all)
+        records, meta = paginated_label_search(StaticSecret.all)
         render json: { data: records.map { |r| record_payload(r) }, meta: meta }
       end
 
       def show
-        ref = StaticSecretRef.find_by_oid!(params[:id])
+        ref = StaticSecret.find_by_oid!(params[:id])
         render json: { data: record_payload(ref) }
       end
 
       def create
-        ref = StaticSecretRef.new(created_by: current_user)
+        ref = StaticSecret.new(created_by: current_user)
         upsert!(ref, data_params)
         render status: :created, json: { data: record_payload(ref) }
       rescue ActiveRecord::RecordInvalid => e
@@ -20,7 +20,7 @@ module Api
       end
 
       def update
-        ref = StaticSecretRef.find_by_oid!(params[:id])
+        ref = StaticSecret.find_by_oid!(params[:id])
         upsert!(ref, data_params)
         render json: { data: record_payload(ref) }
       rescue ActiveRecord::RecordInvalid => e
@@ -30,11 +30,11 @@ module Api
       private
 
       def upsert!(ref, attrs)
-        ssr_attrs = attrs.permit(
+        ss_attrs = attrs.permit(
           :namespace, :foreign_id, :name, :description,
           labels: {}, inject_config: {}, replace_config: {}
         )
-        ssr_attrs[:namespace] = "default" if ref.new_record? && ssr_attrs[:namespace].blank?
+        ss_attrs[:namespace] = "default" if ref.new_record? && ss_attrs[:namespace].blank?
 
         source_attrs = if attrs.key?(:source) && attrs[:source].present?
           attrs.require(:source).permit(:source_type, :secret, config: {})
@@ -46,18 +46,18 @@ module Api
           )
         end
 
-        StaticSecretRef.transaction do
-          ref.assign_attributes(ssr_attrs)
+        StaticSecret.transaction do
+          ref.assign_attributes(ss_attrs)
           ref.save!
 
           ref.source&.destroy!
           if source_attrs
-            SecretSource.create!(source_attrs.to_h.merge(static_secret_ref: ref))
+            SecretSource.create!(source_attrs.to_h.merge(static_secret: ref))
           end
 
           ref.rules.destroy_all
           rules_attrs.each_with_index do |r, i|
-            RequestRule.create!(r.to_h.merge(position: i, static_secret_ref: ref))
+            RequestRule.create!(r.to_h.merge(position: i, static_secret: ref))
           end
 
           ref.reload

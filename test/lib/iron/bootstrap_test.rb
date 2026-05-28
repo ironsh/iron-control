@@ -10,7 +10,7 @@ class Iron::BootstrapTest < ActiveSupport::TestCase
     Grant.delete_all
     Proxy.delete_all
     RequestRule.delete_all
-    StaticSecretRef.delete_all
+    StaticSecret.delete_all
     Principal.delete_all
     ApiKey.unscoped.delete_all
     User.delete_all

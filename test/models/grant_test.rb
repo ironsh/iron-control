@@ -4,12 +4,12 @@ class GrantTest < ActiveSupport::TestCase
   def valid_attrs(overrides = {})
     {
       principal: principals(:acme_channel),
-      static_secret_ref: static_secret_refs(:github_token_inject),
+      static_secret: static_secrets(:github_token_inject),
       created_by: users(:acme_admin)
     }.merge(overrides)
   end
 
-  test "is valid with principal and static_secret_ref" do
+  test "is valid with principal and static_secret" do
     grant = Grant.new(valid_attrs(principal: principals(:globex_user)))
     assert grant.valid?
   end
@@ -20,10 +20,10 @@ class GrantTest < ActiveSupport::TestCase
     assert_includes grant.errors[:principal], "must exist"
   end
 
-  test "requires static_secret_ref" do
-    grant = Grant.new(valid_attrs(static_secret_ref: nil))
+  test "requires static_secret" do
+    grant = Grant.new(valid_attrs(static_secret: nil))
     assert_not grant.valid?
-    assert_includes grant.errors[:static_secret_ref], "must exist"
+    assert_includes grant.errors[:static_secret], "must exist"
   end
 
   test "principal is immutable after creation" do
@@ -33,11 +33,11 @@ class GrantTest < ActiveSupport::TestCase
     end
   end
 
-  test "static_secret_ref is immutable after creation" do
+  test "static_secret is immutable after creation" do
     grant = grants(:acme_channel_github_token)
-    other = static_secret_refs(:db_password_replace)
+    other = static_secrets(:db_password_replace)
     assert_raises(ActiveRecord::ReadonlyAttributeError) do
-      grant.update!(static_secret_ref: other)
+      grant.update!(static_secret: other)
     end
   end
 
@@ -49,8 +49,8 @@ class GrantTest < ActiveSupport::TestCase
     assert_equal 0, Grant.where(id: grant_ids).count
   end
 
-  test "destroyed when static_secret_ref is destroyed" do
-    ref = static_secret_refs(:github_token_inject)
+  test "destroyed when static_secret is destroyed" do
+    ref = static_secrets(:github_token_inject)
     grant_ids = ref.grants.pluck(:id)
     assert_not_empty grant_ids
     ref.destroy!

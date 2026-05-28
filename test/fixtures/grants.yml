@@ -1,9 +1,9 @@
 acme_channel_github_token:
   principal: acme_channel
-  static_secret_ref: github_token_inject
+  static_secret: github_token_inject
   created_by: acme_admin
 
 acme_channel_db_password:
   principal: acme_channel
-  static_secret_ref: db_password_replace
+  static_secret: db_password_replace
   created_by: acme_admin

@@ -30,11 +30,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_28_111433) do
     t.datetime "created_at", null: false
     t.bigint "created_by_id", null: false
     t.bigint "principal_id", null: false
-    t.bigint "static_secret_ref_id", null: false
+    t.bigint "static_secret_id", null: false
     t.datetime "updated_at", null: false
     t.index ["created_by_id"], name: "index_grants_on_created_by_id"
     t.index ["principal_id"], name: "index_grants_on_principal_id"
-    t.index ["static_secret_ref_id"], name: "index_grants_on_static_secret_ref_id"
+    t.index ["static_secret_id"], name: "index_grants_on_static_secret_id"
   end
 
   create_table "principals", force: :cascade do |t|
@@ -66,11 +66,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_28_111433) do
     t.jsonb "http_methods", default: [], null: false
     t.jsonb "paths", default: [], null: false
     t.integer "position", default: 0, null: false
-    t.bigint "static_secret_ref_id"
+    t.bigint "static_secret_id"
     t.datetime "updated_at", null: false
     t.index ["host"], name: "index_request_rules_on_host"
     t.index ["position"], name: "index_request_rules_on_position"
-    t.index ["static_secret_ref_id"], name: "index_request_rules_on_static_secret_ref_id"
+    t.index ["static_secret_id"], name: "index_request_rules_on_static_secret_id"
   end
 
   create_table "secret_sources", force: :cascade do |t|
@@ -78,13 +78,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_28_111433) do
     t.datetime "created_at", null: false
     t.text "secret"
     t.string "source_type", null: false
-    t.bigint "static_secret_ref_id"
+    t.bigint "static_secret_id"
     t.datetime "updated_at", null: false
     t.index ["source_type"], name: "index_secret_sources_on_source_type"
-    t.index ["static_secret_ref_id"], name: "index_secret_sources_on_static_secret_ref_id", unique: true
+    t.index ["static_secret_id"], name: "index_secret_sources_on_static_secret_id", unique: true
   end
 
-  create_table "static_secret_refs", force: :cascade do |t|
+  create_table "static_secrets", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.bigint "created_by_id", null: false
     t.string "description"
@@ -95,9 +95,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_28_111433) do
     t.string "namespace", default: "default", null: false
     t.jsonb "replace_config"
     t.datetime "updated_at", null: false
-    t.index ["created_by_id"], name: "index_static_secret_refs_on_created_by_id"
-    t.index ["labels"], name: "index_static_secret_refs_on_labels", using: :gin
-    t.index ["namespace", "foreign_id"], name: "index_static_secret_refs_on_namespace_and_foreign_id", unique: true
+    t.index ["created_by_id"], name: "index_static_secrets_on_created_by_id"
+    t.index ["labels"], name: "index_static_secrets_on_labels", using: :gin
+    t.index ["namespace", "foreign_id"], name: "index_static_secrets_on_namespace_and_foreign_id", unique: true
   end
 
   create_table "users", force: :cascade do |t|
@@ -110,11 +110,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_28_111433) do
 
   add_foreign_key "api_keys", "users"
   add_foreign_key "grants", "principals"
-  add_foreign_key "grants", "static_secret_refs"
+  add_foreign_key "grants", "static_secrets"
   add_foreign_key "grants", "users", column: "created_by_id"
   add_foreign_key "principals", "users", column: "created_by_id"
   add_foreign_key "proxies", "principals"
-  add_foreign_key "request_rules", "static_secret_refs"
-  add_foreign_key "secret_sources", "static_secret_refs"
-  add_foreign_key "static_secret_refs", "users", column: "created_by_id"
+  add_foreign_key "request_rules", "static_secrets"
+  add_foreign_key "secret_sources", "static_secrets"
+  add_foreign_key "static_secrets", "users", column: "created_by_id"
 end

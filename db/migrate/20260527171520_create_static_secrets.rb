@@ -1,6 +1,6 @@
-class CreateStaticSecretRefs < ActiveRecord::Migration[8.1]
+class CreateStaticSecrets < ActiveRecord::Migration[8.1]
   def change
-    create_table :static_secret_refs do |t|
+    create_table :static_secrets do |t|
       t.string :namespace, null: false
       t.string :name, null: false
       t.string :description
@@ -11,7 +11,7 @@ class CreateStaticSecretRefs < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :static_secret_refs, [ :namespace, :name ], unique: true
-    add_index :static_secret_refs, :labels, using: :gin
+    add_index :static_secrets, [ :namespace, :name ], unique: true
+    add_index :static_secrets, :labels, using: :gin
   end
 end
