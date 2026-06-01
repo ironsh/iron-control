@@ -117,4 +117,47 @@ class SecretSourceTest < ActiveSupport::TestCase
     s = secret_sources(:env_token)
     assert_equal s, SecretSource.find_by_oid(s.oid)
   end
+
+  test "token_broker source is valid with credential_id" do
+    s = new_source(source_type: "token_broker", config: { "credential_id" => "shared" })
+    assert s.valid?, s.errors.full_messages.inspect
+  end
+
+  test "token_broker source accepts failure_ttl" do
+    s = new_source(source_type: "token_broker", config: { "credential_id" => "shared", "failure_ttl" => "30s" })
+    assert s.valid?, s.errors.full_messages.inspect
+  end
+
+  test "token_broker source requires credential_id" do
+    s = new_source(source_type: "token_broker", config: { "failure_ttl" => "30s" })
+    assert_not s.valid?
+    assert s.errors[:config].any? { |m| m.include?("credential_id") }
+  end
+
+  test "token_broker source maps through to_proxy_source" do
+    s = new_source(source_type: "token_broker", config: { "credential_id" => "shared", "ttl" => "1m" })
+    assert_equal({ "credential_id" => "shared", "ttl" => "1m", "type" => "token_broker" }, s.to_proxy_source)
+  end
+
+  test "rejects belonging to more than one owner" do
+    s = new_source(source_type: "env", config: { "var" => "FOO" },
+                   static_secret: static_secrets(:github_token_inject),
+                   gcp_auth_secret: gcp_auth_secrets(:acme_bigquery))
+    assert_not s.valid?
+    assert_includes s.errors[:base], "must belong to at most one of static_secret, gcp_auth_secret, oauth_token_secret"
+  end
+
+  test "role is only allowed for an oauth_token_secret source" do
+    s = new_source(source_type: "env", config: { "var" => "FOO" },
+                   static_secret: static_secrets(:github_token_inject), role: "client_id")
+    assert_not s.valid?
+    assert_includes s.errors[:role], "is only allowed for an oauth_token_secret source"
+  end
+
+  test "role is required for an oauth_token_secret source" do
+    s = new_source(source_type: "env", config: { "var" => "FOO" },
+                   oauth_token_secret: oauth_token_secrets(:acme_gmail_oauth))
+    assert_not s.valid?
+    assert_includes s.errors[:role], "can't be blank for an oauth_token_secret source"
+  end
 end

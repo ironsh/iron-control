@@ -32,6 +32,22 @@ class Proxy < ApplicationRecord
       .order(:id)
   end
 
+  # gcp_auth credentials this proxy may receive, via its principal's grants.
+  def granted_gcp_auth_secrets
+    GcpAuthSecret
+      .where(id: principal.grants.select(:gcp_auth_secret_id))
+      .includes(:keyfile_source, :rules)
+      .order(:id)
+  end
+
+  # oauth_token credentials this proxy may receive, via its principal's grants.
+  def granted_oauth_token_secrets
+    OauthTokenSecret
+      .where(id: principal.grants.select(:oauth_token_secret_id))
+      .includes(:sources, :rules)
+      .order(:id)
+  end
+
   # The `secrets` array delivered to iron-proxy. Each entry maps to the proxy's
   # `secrets` transform `secretEntry` shape. Secrets without a source are skipped
   # because the proxy requires a source to resolve a value.
@@ -42,11 +58,24 @@ class Proxy < ApplicationRecord
     end
   end
 
+  # The `transforms` array delivered to iron-proxy: one gcp_auth transform per
+  # granted GcpAuthSecret, plus a single oauth_token transform bundling every
+  # granted OauthTokenSecret as one `tokens` entry.
+  def sync_transforms
+    transforms = granted_gcp_auth_secrets.map(&:to_proxy_transform)
+
+    oauth_entries = granted_oauth_token_secrets.map(&:to_proxy_entry)
+    transforms << { "name" => "oauth_token", "config" => { "tokens" => oauth_entries } } if oauth_entries.any?
+
+    transforms
+  end
+
   # Opaque, deterministic fingerprint of the delivered config. The proxy treats
   # this as an ETag: it echoes its current hash on each sync and only re-applies
   # config when the hash changes.
   def config_hash
-    "sha256:#{Digest::SHA256.hexdigest(self.class.canonical_json(sync_secrets))}"
+    payload = { "secrets" => sync_secrets, "transforms" => sync_transforms }
+    "sha256:#{Digest::SHA256.hexdigest(self.class.canonical_json(payload))}"
   end
 
   # Deep key-sorted JSON so the hash is stable regardless of Hash insertion or

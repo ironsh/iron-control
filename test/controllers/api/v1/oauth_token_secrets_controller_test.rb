@@ -1,0 +1,137 @@
+require "test_helper"
+
+module Api
+  module V1
+    class OauthTokenSecretsControllerTest < ActionDispatch::IntegrationTest
+      ACME_TOKEN = "iak_acme-ci-token".freeze
+
+      def auth_headers(token = ACME_TOKEN)
+        { "Authorization" => "Bearer #{token}", "Content-Type" => "application/json" }
+      end
+
+      def json_body
+        JSON.parse(response.body)
+      end
+
+      test "rejects requests without an Authorization header" do
+        get api_v1_oauth_token_secret_url(id: "ots_unknown")
+        assert_response :unauthorized
+      end
+
+      test "GET returns an oauth_token secret with its credentials and rules" do
+        secret = oauth_token_secrets(:acme_gmail_oauth)
+        get api_v1_oauth_token_secret_url(id: secret.oid), headers: auth_headers
+        assert_response :ok
+
+        data = json_body.fetch("data")
+        assert_equal "refresh_token", data["grant"]
+        assert_equal({ "source_type" => "env", "config" => { "var" => "GMAIL_CLIENT_ID" } },
+                     data.dig("credentials", "client_id"))
+        assert data.dig("credentials", "refresh_token").present?
+      end
+
+      test "POST creates a refresh_token oauth secret" do
+        body = {
+          data: {
+            namespace: "acme",
+            foreign_id: "new-oauth",
+            grant: "refresh_token",
+            token_endpoint: "https://oauth2.googleapis.com/token",
+            scopes: [ "gmail.readonly" ],
+            credentials: {
+              refresh_token: { source_type: "env", config: { var: "RT" } },
+              client_id: { source_type: "env", config: { var: "CID" } }
+            },
+            rules: [ { host: "gmail.googleapis.com", http_methods: [ "GET" ] } ]
+          }
+        }
+
+        assert_difference -> { OauthTokenSecret.count } => 1 do
+          post api_v1_oauth_token_secrets_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :created
+
+        secret = OauthTokenSecret.find_by_oid(json_body.dig("data", "id"))
+        assert_equal %w[client_id refresh_token].sort, secret.sources.map(&:role).sort
+        assert_equal 1, secret.rules.count
+      end
+
+      test "POST creates a password grant with token_endpoint_headers" do
+        body = {
+          data: {
+            namespace: "acme",
+            foreign_id: "alphasense",
+            grant: "password",
+            token_endpoint: "https://api.alpha-sense.com/token",
+            credentials: {
+              username: { source_type: "env", config: { var: "AS_USER" } },
+              password: { source_type: "env", config: { var: "AS_PASS" } },
+              client_id: { source_type: "env", config: { var: "AS_CID" } }
+            },
+            token_endpoint_headers: {
+              "x-api-key": { source_type: "env", config: { var: "AS_KEY" } }
+            },
+            rules: [ { host: "api.alpha-sense.com" } ]
+          }
+        }
+
+        post api_v1_oauth_token_secrets_url, params: body.to_json, headers: auth_headers
+        assert_response :created
+
+        secret = OauthTokenSecret.find_by_oid(json_body.dig("data", "id"))
+        header = secret.sources.find(&:endpoint_header?)
+        assert_equal "x-api-key", header.role
+        assert_equal({ "x-api-key" => { "source_type" => "env", "config" => { "var" => "AS_KEY" } } },
+                     json_body.dig("data", "token_endpoint_headers"))
+      end
+
+      test "POST rejects a grant that is missing a required field" do
+        body = {
+          data: {
+            namespace: "acme",
+            foreign_id: "incomplete",
+            grant: "refresh_token",
+            token_endpoint: "https://oauth2.googleapis.com/token",
+            credentials: { refresh_token: { source_type: "env", config: { var: "RT" } } },
+            rules: [ { host: "gmail.googleapis.com" } ]
+          }
+        }
+
+        assert_no_difference -> { OauthTokenSecret.count } do
+          post api_v1_oauth_token_secrets_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :unprocessable_entity
+      end
+
+      test "PUT replaces credentials and rules" do
+        secret = oauth_token_secrets(:acme_gmail_oauth)
+        body = {
+          data: {
+            grant: "client_credentials",
+            token_endpoint: "https://oauth2.googleapis.com/token",
+            credentials: {
+              client_id: { source_type: "env", config: { var: "NEW_CID" } },
+              client_secret: { source_type: "env", config: { var: "NEW_SECRET" } }
+            },
+            rules: [ { host: "www.googleapis.com" } ]
+          }
+        }
+
+        put api_v1_oauth_token_secret_url(id: secret.oid), params: body.to_json, headers: auth_headers
+        assert_response :ok
+
+        secret.reload
+        assert_equal "client_credentials", secret.grant
+        assert_equal %w[client_id client_secret].sort, secret.sources.map(&:role).sort
+        assert_equal 1, secret.rules.count
+      end
+
+      test "GET index is scoped by namespace" do
+        get api_v1_oauth_token_secrets_url, params: { namespace: "acme" }, headers: auth_headers
+        assert_response :ok
+        ids = json_body.fetch("data").map { |r| r["id"] }
+        assert_includes ids, oauth_token_secrets(:acme_gmail_oauth).oid
+      end
+    end
+  end
+end

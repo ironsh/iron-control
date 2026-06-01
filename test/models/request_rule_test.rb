@@ -115,4 +115,12 @@ class RequestRuleTest < ActiveSupport::TestCase
     r = request_rules(:api_host)
     assert_equal r, RequestRule.find_by_oid(r.oid)
   end
+
+  test "rejects belonging to more than one owner" do
+    r = new_rule(host: "x",
+                 static_secret: static_secrets(:github_token_inject),
+                 oauth_token_secret: oauth_token_secrets(:acme_gmail_oauth))
+    assert_not r.valid?
+    assert_includes r.errors[:base], "must belong to at most one of static_secret, gcp_auth_secret, oauth_token_secret"
+  end
 end

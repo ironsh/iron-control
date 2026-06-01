@@ -70,6 +70,40 @@ module Api
         assert_equal secret_ref.oid, data["static_secret_id"]
       end
 
+      test "POST creates a Grant for a gcp_auth secret" do
+        principal = principals(:globex_user)
+        secret = gcp_auth_secrets(:acme_bigquery)
+
+        body = { data: { principal_id: principal.oid, gcp_auth_secret_id: secret.oid } }
+
+        assert_difference -> { Grant.count } => 1 do
+          post api_v1_grants_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :created
+        assert_equal secret.oid, json_body.dig("data", "gcp_auth_secret_id")
+      end
+
+      test "POST creates a Grant for an oauth_token secret" do
+        principal = principals(:globex_user)
+        secret = oauth_token_secrets(:acme_gmail_oauth)
+
+        body = { data: { principal_id: principal.oid, oauth_token_secret_id: secret.oid } }
+
+        post api_v1_grants_url, params: body.to_json, headers: auth_headers
+        assert_response :created
+        assert_equal secret.oid, json_body.dig("data", "oauth_token_secret_id")
+      end
+
+      test "POST returns 422 when no grantable id is supplied" do
+        principal = principals(:globex_user)
+        body = { data: { principal_id: principal.oid } }
+
+        assert_no_difference -> { Grant.count } do
+          post api_v1_grants_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :unprocessable_entity
+      end
+
       test "POST returns 404 when principal_id is unknown" do
         secret_ref = static_secrets(:github_token_inject)
         body = {

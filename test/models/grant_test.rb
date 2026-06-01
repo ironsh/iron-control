@@ -20,10 +20,16 @@ class GrantTest < ActiveSupport::TestCase
     assert_includes grant.errors[:principal], "must exist"
   end
 
-  test "requires static_secret" do
+  test "requires exactly one grantable" do
     grant = Grant.new(valid_attrs(static_secret: nil))
     assert_not grant.valid?
-    assert_includes grant.errors[:static_secret], "must exist"
+    assert_includes grant.errors[:base], "must reference exactly one of static_secret, gcp_auth_secret, oauth_token_secret"
+  end
+
+  test "rejects more than one grantable" do
+    grant = Grant.new(valid_attrs(gcp_auth_secret: gcp_auth_secrets(:acme_bigquery)))
+    assert_not grant.valid?
+    assert_includes grant.errors[:base], "must reference exactly one of static_secret, gcp_auth_secret, oauth_token_secret"
   end
 
   test "principal is immutable after creation" do
