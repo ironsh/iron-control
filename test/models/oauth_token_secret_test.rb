@@ -1,8 +1,8 @@
 require "test_helper"
 
 class OauthTokenSecretTest < ActiveSupport::TestCase
-  def src(role, endpoint_header: false)
-    SecretSource.new(source_type: "env", config: { "var" => role.upcase }, role: role, endpoint_header: endpoint_header)
+  def src(role, kind: "credential_field")
+    SecretSource.new(source_type: "env", config: { "var" => role.upcase }, role: role, role_kind: kind)
   end
 
   def build(grant:, roles:, overrides: {})
@@ -88,7 +88,7 @@ class OauthTokenSecretTest < ActiveSupport::TestCase
       roles: %w[refresh_token client_id],
       overrides: { scopes: [ "gmail.readonly" ], header: "X-Auth", value_prefix: "Token " }
     )
-    secret.sources += [ src("x-api-key", endpoint_header: true) ]
+    secret.sources += [ src("x-api-key", kind: "endpoint_header") ]
     secret.save!
 
     entry = secret.reload.to_proxy_entry

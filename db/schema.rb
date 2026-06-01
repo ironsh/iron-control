@@ -121,16 +121,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_01_174025) do
   create_table "secret_sources", force: :cascade do |t|
     t.jsonb "config", default: {}, null: false
     t.datetime "created_at", null: false
-    t.boolean "endpoint_header", default: false, null: false
     t.bigint "gcp_auth_secret_id"
     t.bigint "oauth_token_secret_id"
     t.string "role"
+    t.string "role_kind"
     t.text "secret"
     t.string "source_type", null: false
     t.bigint "static_secret_id"
     t.datetime "updated_at", null: false
     t.index ["gcp_auth_secret_id"], name: "index_secret_sources_on_gcp_auth_secret_id", unique: true
-    t.index ["oauth_token_secret_id", "role", "endpoint_header"], name: "index_secret_sources_on_oauth_owner_and_role", unique: true
+    t.index ["oauth_token_secret_id", "role", "role_kind"], name: "index_secret_sources_on_oauth_owner_and_role", unique: true
     t.index ["oauth_token_secret_id"], name: "index_secret_sources_on_oauth_token_secret_id"
     t.index ["source_type"], name: "index_secret_sources_on_source_type"
     t.index ["static_secret_id"], name: "index_secret_sources_on_static_secret_id", unique: true

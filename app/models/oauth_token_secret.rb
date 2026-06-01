@@ -30,13 +30,13 @@ class OauthTokenSecret < ApplicationRecord
   # Maps to one entry in the iron-proxy oauth_token transform's `tokens` list.
   def to_proxy_entry
     entry = { "grant" => grant, "token_endpoint" => token_endpoint }
-    sources.reject(&:endpoint_header).each { |s| entry[s.role] = s.to_proxy_source }
+    sources.select(&:credential_field?).each { |s| entry[s.role] = s.to_proxy_source }
     entry["audience"] = audience if audience.present?
     entry["scopes"] = scopes if scopes.present?
     entry["header"] = header if header.present?
     entry["value_prefix"] = value_prefix if value_prefix.present?
 
-    headers = sources.select(&:endpoint_header)
+    headers = sources.select(&:endpoint_header?)
     entry["token_endpoint_headers"] = headers.to_h { |s| [ s.role, s.to_proxy_source ] } if headers.any?
 
     entry["rules"] = rules.map(&:to_proxy_rule)
@@ -74,7 +74,7 @@ class OauthTokenSecret < ApplicationRecord
     spec = GRANT_FIELDS[grant]
     return unless spec # an invalid grant is reported separately
 
-    credential_roles = sources.reject(&:endpoint_header).map(&:role)
+    credential_roles = sources.select(&:credential_field?).map(&:role)
 
     credential_roles.each do |role|
       errors.add(:sources, "#{role.inspect} is not a valid credential field") unless CREDENTIAL_FIELDS.include?(role)

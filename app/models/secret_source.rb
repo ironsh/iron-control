@@ -22,6 +22,10 @@ class SecretSource < ApplicationRecord
   belongs_to :gcp_auth_secret, optional: true
   belongs_to :oauth_token_secret, optional: true
 
+  # Only set for oauth_token_secret-owned sources: whether `role` names a
+  # credential field (client_id, ...) or a token-endpoint header.
+  enum :role_kind, { credential_field: "credential_field", endpoint_header: "endpoint_header" }, validate: { allow_nil: true }
+
   encrypts :secret
 
   attr_readonly :source_type
@@ -61,8 +65,10 @@ class SecretSource < ApplicationRecord
   def role_matches_owner
     if oauth_token_secret.present?
       errors.add(:role, "can't be blank for an oauth_token_secret source") if role.blank?
-    elsif role.present?
-      errors.add(:role, "is only allowed for an oauth_token_secret source")
+      errors.add(:role_kind, "can't be blank for an oauth_token_secret source") if role_kind.blank?
+    else
+      errors.add(:role, "is only allowed for an oauth_token_secret source") if role.present?
+      errors.add(:role_kind, "is only allowed for an oauth_token_secret source") if role_kind.present?
     end
   end
 

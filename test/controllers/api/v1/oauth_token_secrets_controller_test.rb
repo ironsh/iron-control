@@ -79,7 +79,7 @@ module Api
         assert_response :created
 
         secret = OauthTokenSecret.find_by_oid(json_body.dig("data", "id"))
-        header = secret.sources.find(&:endpoint_header)
+        header = secret.sources.find(&:endpoint_header?)
         assert_equal "x-api-key", header.role
         assert_equal({ "x-api-key" => { "source_type" => "env", "config" => { "var" => "AS_KEY" } } },
                      json_body.dig("data", "token_endpoint_headers"))

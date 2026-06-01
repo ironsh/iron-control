@@ -53,7 +53,7 @@ module Api
         return [] unless attrs.key?(:credentials) && attrs[:credentials].present?
 
         attrs.require(:credentials).each_pair.map do |role, src|
-          SecretSource.new(permit_source(src).merge(role: role.to_s, endpoint_header: false))
+          SecretSource.new(permit_source(src).merge(role: role.to_s, role_kind: "credential_field"))
         end
       end
 
@@ -61,7 +61,7 @@ module Api
         return [] unless attrs.key?(:token_endpoint_headers) && attrs[:token_endpoint_headers].present?
 
         attrs.require(:token_endpoint_headers).each_pair.map do |name, src|
-          SecretSource.new(permit_source(src).merge(role: name.to_s, endpoint_header: true))
+          SecretSource.new(permit_source(src).merge(role: name.to_s, role_kind: "endpoint_header"))
         end
       end
 
@@ -78,8 +78,8 @@ module Api
       end
 
       def record_payload(ref)
-        cred = ref.sources.reject(&:endpoint_header)
-        headers = ref.sources.select(&:endpoint_header)
+        cred = ref.sources.select(&:credential_field?)
+        headers = ref.sources.select(&:endpoint_header?)
         {
           id: ref.oid,
           namespace: ref.namespace,
