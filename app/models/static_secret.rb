@@ -38,6 +38,18 @@ class StaticSecret < ApplicationRecord
   has_many :rules, class_name: "RequestRule", dependent: :destroy
   belongs_to :created_by, class_name: "User"
 
+  # Maps to a single entry in the iron-proxy `secrets` transform array. The
+  # caller is responsible for skipping secrets without a source.
+  def to_proxy_secret
+    entry = {
+      "source" => source&.to_proxy_source,
+      "rules" => rules.map(&:to_proxy_rule)
+    }
+    entry["inject"] = inject_config if inject_config.present?
+    entry["replace"] = replace_config if replace_config.present?
+    entry
+  end
+
   validates :namespace, presence: true, format: { with: URL_SAFE_FORMAT, message: URL_SAFE_MESSAGE }
   validates :foreign_id, uniqueness: { scope: :namespace, allow_nil: true },
             format: { with: URL_SAFE_FORMAT, message: URL_SAFE_MESSAGE }, allow_nil: true

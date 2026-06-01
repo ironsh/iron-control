@@ -10,6 +10,18 @@ class RequestRule < ApplicationRecord
 
   default_scope { order(:position) }
 
+  # Maps to the iron-proxy `hostmatch.RuleConfig` shape. Note the proxy uses
+  # `methods` where iron-control stores `http_methods`. Blank fields are omitted
+  # so they decode as the proxy's omitempty defaults.
+  def to_proxy_rule
+    rule = {}
+    rule["host"] = host if host.present?
+    rule["cidr"] = cidr if cidr.present?
+    rule["methods"] = http_methods if http_methods.present?
+    rule["paths"] = paths if paths.present?
+    rule
+  end
+
   validates :position, presence: true, numericality: { only_integer: true }
   validate :host_xor_cidr
   validate :cidr_is_valid

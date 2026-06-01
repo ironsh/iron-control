@@ -20,6 +20,17 @@ class SecretSource < ApplicationRecord
 
   attr_readonly :source_type
 
+  # Maps this source to the iron-proxy `secrets` transform `source` block,
+  # discriminated by `type`. For control_plane sources the decrypted value is
+  # delivered inline; all other types pass their config through (the proxy's
+  # backend resolvers read the matching keys and ignore unknown ones).
+  def to_proxy_source
+    source = config.is_a?(Hash) ? config.dup : {}
+    source["type"] = source_type
+    source["value"] = secret if source_type == "control_plane"
+    source
+  end
+
   validates :source_type, presence: true, inclusion: { in: SOURCE_TYPES }
   validate :config_is_a_hash
   validate :config_matches_source_type

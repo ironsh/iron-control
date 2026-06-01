@@ -1,10 +1,9 @@
 acme_proxy:
   name: acme-prod-proxy
   principal: acme_channel
-  bearer_token_hash: <%= Digest::SHA256.hexdigest("acme-token") %>
+  bearer_token_hash: <%= Digest::SHA256.hexdigest("iprx_#{'a' * 64}") %>
 
 globex_proxy:
   name: globex-staging-proxy
   principal: globex_user
-  bearer_token_hash: <%= Digest::SHA256.hexdigest("globex-token") %>
-
+  bearer_token_hash: <%= Digest::SHA256.hexdigest("iprx_#{'b' * 64}") %>
