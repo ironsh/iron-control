@@ -31,7 +31,7 @@ jobs:
           images: docker.io/ironsh/iron-control
           tags: |
             type=raw,value=latest
-            type=sha,format=long
+            type=sha
 
       - name: Build and push
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
