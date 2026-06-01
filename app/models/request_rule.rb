@@ -6,7 +6,12 @@ class RequestRule < ApplicationRecord
   HTTP_METHODS = %w[GET HEAD POST PUT PATCH DELETE OPTIONS CONNECT].freeze
   METHOD_WILDCARD = "*".freeze
 
+  # A rule hangs off exactly one credential type.
   belongs_to :static_secret, optional: true
+  belongs_to :gcp_auth_secret, optional: true
+  belongs_to :oauth_token_secret, optional: true
+
+  OWNER_ASSOCIATIONS = %i[static_secret gcp_auth_secret oauth_token_secret].freeze
 
   default_scope { order(:position) }
 
@@ -27,8 +32,19 @@ class RequestRule < ApplicationRecord
   validate :cidr_is_valid
   validate :http_methods_are_valid
   validate :paths_are_valid
+  validate :at_most_one_owner
 
   private
+
+  def at_most_one_owner
+    # Check the association object, not just the FK column: when built through a
+    # parent (parent.rules.build / parent.rules =) autosave validates this record
+    # before the parent is persisted, so the FK is still nil but the inverse
+    # association is already set.
+    set = OWNER_ASSOCIATIONS.count { |assoc| send(assoc).present? }
+    return if set <= 1
+    errors.add(:base, "must belong to at most one of #{OWNER_ASSOCIATIONS.join(", ")}")
+  end
 
   def host_xor_cidr
     if host.present? && cidr.present?

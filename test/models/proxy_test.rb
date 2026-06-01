@@ -67,4 +67,46 @@ class ProxyTest < ActiveSupport::TestCase
     assert_not dup.valid?
     assert_includes dup.errors[:bearer_token_hash], "has already been taken"
   end
+
+  # --- transform delivery -------------------------------------------------
+
+  def proxy_with_grants(*grantables)
+    proxy = Proxy.create!(name: "transform-proxy", principal: principals(:globex_user))
+    grantables.each do |g|
+      key = Grant::GRANTABLE_ASSOCIATIONS.find { |a| g.is_a?(a.to_s.camelize.constantize) }
+      Grant.create!(principal: proxy.principal, key => g, created_by: users(:globex_admin))
+    end
+    proxy
+  end
+
+  test "sync_transforms emits a gcp_auth transform per granted GcpAuthSecret" do
+    proxy = proxy_with_grants(gcp_auth_secrets(:acme_bigquery))
+    transforms = proxy.sync_transforms
+    assert_equal 1, transforms.length
+    assert_equal "gcp_auth", transforms.first["name"]
+    assert_equal({ "type" => "workload_identity" }, transforms.first.dig("config", "credentials_provider"))
+  end
+
+  test "sync_transforms bundles all granted oauth tokens into one transform" do
+    proxy = proxy_with_grants(oauth_token_secrets(:acme_gmail_oauth))
+    transforms = proxy.sync_transforms
+    oauth = transforms.find { |t| t["name"] == "oauth_token" }
+    refute_nil oauth
+    tokens = oauth.dig("config", "tokens")
+    assert_equal 1, tokens.length
+    assert_equal "refresh_token", tokens.first["grant"]
+  end
+
+  test "sync_transforms is empty without transform grants" do
+    proxy = Proxy.create!(name: "bare", principal: principals(:globex_user))
+    assert_empty proxy.sync_transforms
+  end
+
+  test "config_hash changes when a transform grant is added" do
+    proxy = Proxy.create!(name: "hashing", principal: principals(:globex_user))
+    before = proxy.config_hash
+    Grant.create!(principal: proxy.principal, gcp_auth_secret: gcp_auth_secrets(:acme_bigquery),
+                  created_by: users(:globex_admin))
+    refute_equal before, proxy.config_hash
+  end
 end

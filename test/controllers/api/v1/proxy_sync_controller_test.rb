@@ -116,4 +116,27 @@ class ProxySyncControllerTest < ActionDispatch::IntegrationTest
     second = Proxy.find(@proxy.id).config_hash
     assert_equal first, second
   end
+
+  test "transforms carries gcp_auth per grant and a single bundled oauth_token" do
+    admin = users(:acme_admin)
+    Grant.create!(principal: @proxy.principal, gcp_auth_secret: gcp_auth_secrets(:acme_bigquery), created_by: admin)
+    Grant.create!(principal: @proxy.principal, oauth_token_secret: oauth_token_secrets(:acme_gmail_oauth), created_by: admin)
+
+    post api_v1_proxy_sync_url, params: {}.to_json, headers: auth_headers
+    assert_response :ok
+
+    transforms = json_body.fetch("transforms")
+    names = transforms.map { |t| t["name"] }
+    assert_equal 1, names.count("gcp_auth")
+    assert_equal 1, names.count("oauth_token")
+
+    oauth = transforms.find { |t| t["name"] == "oauth_token" }
+    assert_equal 1, oauth.dig("config", "tokens").length
+  end
+
+  test "transforms is an empty array when no transform grants exist" do
+    post api_v1_proxy_sync_url, params: {}.to_json, headers: auth_headers
+    assert_response :ok
+    assert_equal [], json_body.fetch("transforms")
+  end
 end

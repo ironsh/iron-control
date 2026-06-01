@@ -12,3 +12,15 @@ wildcard_host:
   host: "*"
   http_methods: ["*"]
   paths: []
+
+gcp_googleapis:
+  host: "*.googleapis.com"
+  http_methods: []
+  paths: []
+  gcp_auth_secret: acme_bigquery
+
+oauth_gmail_host:
+  host: gmail.googleapis.com
+  http_methods: ["GET"]
+  paths: []
+  oauth_token_secret: acme_gmail_oauth

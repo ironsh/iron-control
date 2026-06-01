@@ -6,14 +6,29 @@ module Api
         render json: serialize(grant)
       end
 
+      GRANTABLE_TYPES = {
+        static_secret_id: StaticSecret,
+        gcp_auth_secret_id: GcpAuthSecret,
+        oauth_token_secret_id: OauthTokenSecret
+      }.freeze
+
       def create
-        attrs = data_params.permit(:principal_id, :static_secret_id)
+        attrs = data_params.permit(:principal_id, *GRANTABLE_TYPES.keys)
         principal = Principal.find_by_oid!(attrs[:principal_id])
-        static_secret = StaticSecret.find_by_oid!(attrs[:static_secret_id])
+
+        grantable_key = GRANTABLE_TYPES.keys.find { |k| attrs[k].present? }
+        unless grantable_key
+          return render status: :unprocessable_entity, json: {
+            error: { message: "validation failed",
+                     details: { base: [ "must reference one of #{GRANTABLE_TYPES.keys.join(", ")}" ] } }
+          }
+        end
+        grantable = GRANTABLE_TYPES.fetch(grantable_key).find_by_oid!(attrs[grantable_key])
+        association = grantable_key.to_s.delete_suffix("_id").to_sym
 
         grant = Grant.create!(
           principal: principal,
-          static_secret: static_secret,
+          association => grantable,
           created_by: current_user
         )
         render status: :created, json: serialize(grant)
@@ -30,11 +45,13 @@ module Api
       private
 
       def serialize(grant)
+        grantable = grant.grantable
+        key = GRANTABLE_TYPES.key(grantable.class)
         {
           data: {
             id: grant.oid,
             principal_id: grant.principal.oid,
-            static_secret_id: grant.static_secret.oid,
+            key => grantable.oid,
             created_at: grant.created_at,
             updated_at: grant.updated_at
           }

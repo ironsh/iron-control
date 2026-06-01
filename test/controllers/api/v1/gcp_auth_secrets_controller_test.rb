@@ -1,0 +1,133 @@
+require "test_helper"
+
+module Api
+  module V1
+    class GcpAuthSecretsControllerTest < ActionDispatch::IntegrationTest
+      ACME_TOKEN = "iak_acme-ci-token".freeze
+
+      def auth_headers(token = ACME_TOKEN)
+        { "Authorization" => "Bearer #{token}", "Content-Type" => "application/json" }
+      end
+
+      def json_body
+        JSON.parse(response.body)
+      end
+
+      test "rejects requests without an Authorization header" do
+        get api_v1_gcp_auth_secret_url(id: "gas_unknown")
+        assert_response :unauthorized
+      end
+
+      test "GET returns a gcp_auth secret with its keyfile and rules" do
+        secret = gcp_auth_secrets(:acme_gcs_keyfile)
+        get api_v1_gcp_auth_secret_url(id: secret.oid), headers: auth_headers
+        assert_response :ok
+
+        data = json_body.fetch("data")
+        assert_equal secret.oid, data["id"]
+        assert_equal({ "source_type" => "env", "config" => { "var" => "GCP_SA_KEYFILE" } }, data["keyfile"])
+        assert_equal "storage-bot@acme.example", data["subject"]
+      end
+
+      test "POST creates a gcp_auth secret with credentials_provider" do
+        body = {
+          data: {
+            namespace: "acme",
+            foreign_id: "new-wif",
+            name: "wif",
+            credentials_provider: { type: "workload_identity" },
+            scopes: [ "https://www.googleapis.com/auth/cloud-platform" ],
+            rules: [ { host: "*.googleapis.com" } ]
+          }
+        }
+
+        assert_difference -> { GcpAuthSecret.count } => 1 do
+          post api_v1_gcp_auth_secrets_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :created
+
+        data = json_body.fetch("data")
+        assert_equal({ "type" => "workload_identity" }, data["credentials_provider"])
+        assert_equal 1, data["rules"].length
+      end
+
+      test "POST creates a gcp_auth secret with a nested keyfile source" do
+        body = {
+          data: {
+            namespace: "acme",
+            foreign_id: "new-keyfile",
+            keyfile: { source_type: "env", config: { var: "MY_SA" } },
+            subject: "bot@acme.example",
+            scopes: [ "scopeA" ]
+          }
+        }
+
+        post api_v1_gcp_auth_secrets_url, params: body.to_json, headers: auth_headers
+        assert_response :created
+
+        secret = GcpAuthSecret.find_by_oid(json_body.dig("data", "id"))
+        assert_equal "env", secret.keyfile_source.source_type
+        assert_equal "bot@acme.example", secret.subject
+      end
+
+      test "POST never echoes a control_plane keyfile secret back" do
+        body = {
+          data: {
+            namespace: "acme",
+            foreign_id: "inline-keyfile",
+            keyfile: { source_type: "control_plane", secret: "{\"client_email\":\"x\"}" },
+            scopes: [ "scopeA" ]
+          }
+        }
+
+        post api_v1_gcp_auth_secrets_url, params: body.to_json, headers: auth_headers
+        assert_response :created
+        refute_includes response.body, "client_email"
+      end
+
+      test "POST rejects both keyfile and credentials_provider" do
+        body = {
+          data: {
+            namespace: "acme",
+            foreign_id: "conflict",
+            keyfile: { source_type: "env", config: { var: "MY_SA" } },
+            credentials_provider: { type: "workload_identity" },
+            scopes: [ "scopeA" ]
+          }
+        }
+
+        assert_no_difference -> { GcpAuthSecret.count } do
+          post api_v1_gcp_auth_secrets_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :unprocessable_entity
+      end
+
+      test "PUT replaces rules and keyfile" do
+        secret = gcp_auth_secrets(:acme_gcs_keyfile)
+        body = {
+          data: {
+            keyfile: { source_type: "env", config: { var: "ROTATED_SA" } },
+            subject: "storage-bot@acme.example",
+            scopes: [ "scopeB" ],
+            rules: [ { host: "storage.googleapis.com" } ]
+          }
+        }
+
+        put api_v1_gcp_auth_secret_url(id: secret.oid), params: body.to_json, headers: auth_headers
+        assert_response :ok
+
+        secret.reload
+        assert_equal "ROTATED_SA", secret.keyfile_source.config["var"]
+        assert_equal [ "scopeB" ], secret.scopes
+        assert_equal 1, secret.rules.count
+      end
+
+      test "GET index is scoped by namespace" do
+        get api_v1_gcp_auth_secrets_url, params: { namespace: "acme" }, headers: auth_headers
+        assert_response :ok
+        ids = json_body.fetch("data").map { |r| r["id"] }
+        assert_includes ids, gcp_auth_secrets(:acme_bigquery).oid
+      end
+    end
+  end
+end
