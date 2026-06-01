@@ -14,7 +14,7 @@ class SecretSource < ApplicationRecord
     "control_plane" => { required: [], optional: [] }
   }.freeze
 
-  belongs_to :static_secret_ref, optional: true
+  belongs_to :static_secret, optional: true
 
   encrypts :secret
 

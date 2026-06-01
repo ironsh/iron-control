@@ -2,7 +2,7 @@ require "test_helper"
 
 module Api
   module V1
-    class SecretRefsControllerTest < ActionDispatch::IntegrationTest
+    class StaticSecretsControllerTest < ActionDispatch::IntegrationTest
       ACME_TOKEN = "iak_acme-ci-token".freeze
 
       def auth_headers(token = ACME_TOKEN)
@@ -14,31 +14,31 @@ module Api
       end
 
       test "rejects requests without an Authorization header" do
-        get api_v1_secret_ref_url(id: "ssr_unknown")
+        get api_v1_static_secret_url(id: "ssr_unknown")
         assert_response :unauthorized
         assert_equal "invalid or missing API key", json_body.dig("error", "message")
       end
 
       test "rejects requests with an unknown bearer token" do
-        get api_v1_secret_ref_url(id: "ssr_unknown"),
+        get api_v1_static_secret_url(id: "ssr_unknown"),
             headers: auth_headers("iak_not-a-real-token")
         assert_response :unauthorized
       end
 
       test "rejects requests with a malformed Authorization scheme" do
-        get api_v1_secret_ref_url(id: "ssr_unknown"),
+        get api_v1_static_secret_url(id: "ssr_unknown"),
             headers: { "Authorization" => "Token #{ACME_TOKEN}" }
         assert_response :unauthorized
       end
 
       test "GET returns a SecretRef with its source and rules" do
-        ref = static_secret_refs(:github_token_inject)
+        ref = static_secrets(:github_token_inject)
         SecretSource.create!(source_type: "env", config: { "var" => "GITHUB_TOKEN" },
-                              static_secret_ref: ref)
+                              static_secret: ref)
         RequestRule.create!(host: "api.github.com", http_methods: %w[GET POST],
-                             paths: [ "/" ], position: 0, static_secret_ref: ref)
+                             paths: [ "/" ], position: 0, static_secret: ref)
 
-        get api_v1_secret_ref_url(id: ref.oid), headers: auth_headers
+        get api_v1_static_secret_url(id: ref.oid), headers: auth_headers
         assert_response :ok
 
         data = json_body.fetch("data")
@@ -58,7 +58,7 @@ module Api
       end
 
       test "GET returns 404 for an unknown oid" do
-        get api_v1_secret_ref_url(id: "ssr_nope"), headers: auth_headers
+        get api_v1_static_secret_url(id: "ssr_nope"), headers: auth_headers
         assert_response :not_found
       end
 
@@ -78,10 +78,10 @@ module Api
           }
         }
 
-        assert_difference -> { StaticSecretRef.count } => 1,
+        assert_difference -> { StaticSecret.count } => 1,
                           -> { SecretSource.count } => 1,
                           -> { RequestRule.count } => 2 do
-          post api_v1_secret_refs_url, params: body.to_json, headers: auth_headers
+          post api_v1_static_secrets_url, params: body.to_json, headers: auth_headers
         end
         assert_response :created
 
@@ -106,7 +106,7 @@ module Api
           }
         }
 
-        post api_v1_secret_refs_url, params: body.to_json, headers: auth_headers
+        post api_v1_static_secrets_url, params: body.to_json, headers: auth_headers
         assert_response :created
 
         data = json_body.fetch("data")
@@ -124,8 +124,8 @@ module Api
           }
         }
 
-        assert_no_difference -> { StaticSecretRef.count } do
-          post api_v1_secret_refs_url, params: body.to_json, headers: auth_headers
+        assert_no_difference -> { StaticSecret.count } do
+          post api_v1_static_secrets_url, params: body.to_json, headers: auth_headers
         end
         assert_response :unprocessable_content
         assert_equal "validation failed", json_body.dig("error", "message")
@@ -143,22 +143,22 @@ module Api
           }
         }
 
-        assert_no_difference [ "StaticSecretRef.count", "SecretSource.count", "RequestRule.count" ] do
-          post api_v1_secret_refs_url, params: body.to_json, headers: auth_headers
+        assert_no_difference [ "StaticSecret.count", "SecretSource.count", "RequestRule.count" ] do
+          post api_v1_static_secrets_url, params: body.to_json, headers: auth_headers
         end
         assert_response :unprocessable_content
       end
 
       test "POST returns 400 when the data key is missing" do
-        post api_v1_secret_refs_url, params: { namespace: "acme" }.to_json, headers: auth_headers
+        post api_v1_static_secrets_url, params: { namespace: "acme" }.to_json, headers: auth_headers
         assert_response :bad_request
       end
 
       test "PUT updates SSR fields and replaces source and rules" do
-        ref = static_secret_refs(:github_token_inject)
-        SecretSource.create!(source_type: "env", config: { "var" => "OLD" }, static_secret_ref: ref)
+        ref = static_secrets(:github_token_inject)
+        SecretSource.create!(source_type: "env", config: { "var" => "OLD" }, static_secret: ref)
         old_rule = RequestRule.create!(host: "old.example.com", http_methods: [ "GET" ],
-                                       paths: [ "/" ], position: 0, static_secret_ref: ref)
+                                       paths: [ "/" ], position: 0, static_secret: ref)
 
         body = {
           data: {
@@ -171,7 +171,7 @@ module Api
           }
         }
 
-        put api_v1_secret_ref_url(id: ref.oid), params: body.to_json, headers: auth_headers
+        put api_v1_static_secret_url(id: ref.oid), params: body.to_json, headers: auth_headers
         assert_response :ok
 
         ref.reload
@@ -183,8 +183,8 @@ module Api
       end
 
       test "PUT rolls back changes when validation fails" do
-        ref = static_secret_refs(:github_token_inject)
-        SecretSource.create!(source_type: "env", config: { "var" => "ORIGINAL" }, static_secret_ref: ref)
+        ref = static_secrets(:github_token_inject)
+        SecretSource.create!(source_type: "env", config: { "var" => "ORIGINAL" }, static_secret: ref)
 
         body = {
           data: {
@@ -197,7 +197,7 @@ module Api
           }
         }
 
-        put api_v1_secret_ref_url(id: ref.oid), params: body.to_json, headers: auth_headers
+        put api_v1_static_secret_url(id: ref.oid), params: body.to_json, headers: auth_headers
         assert_response :unprocessable_content
 
         ref.reload
@@ -206,36 +206,36 @@ module Api
       end
 
       test "PUT returns 404 for an unknown oid" do
-        put api_v1_secret_ref_url(id: "ssr_nope"),
+        put api_v1_static_secret_url(id: "ssr_nope"),
             params: { data: { namespace: "acme", name: "x", inject_config: { "header" => "X" } } }.to_json,
             headers: auth_headers
         assert_response :not_found
       end
 
       test "GET index rejects requests without an Authorization header" do
-        get api_v1_secret_refs_url, params: { namespace: "acme" }
+        get api_v1_static_secrets_url, params: { namespace: "acme" }
         assert_response :unauthorized
       end
 
       test "GET index returns 400 when namespace is missing" do
-        get api_v1_secret_refs_url, headers: auth_headers
+        get api_v1_static_secrets_url, headers: auth_headers
         assert_response :bad_request
       end
 
       test "GET index returns all secret_refs in a namespace" do
-        get api_v1_secret_refs_url, params: { namespace: "acme" }, headers: auth_headers
+        get api_v1_static_secrets_url, params: { namespace: "acme" }, headers: auth_headers
         assert_response :ok
 
         body = json_body
         names = body.fetch("data").map { |r| r["name"] }
-        expected = StaticSecretRef.where(namespace: "acme").pluck(:name)
+        expected = StaticSecret.where(namespace: "acme").pluck(:name)
         assert_equal expected.sort, names.sort
         assert body["data"].all? { |r| r["namespace"] == "acme" }
         assert_equal expected.length, body.dig("meta", "total")
       end
 
       test "GET index filters by a single label" do
-        get api_v1_secret_refs_url,
+        get api_v1_static_secrets_url,
             params: { namespace: "acme", labels: { env: "prod" } },
             headers: auth_headers
         assert_response :ok
@@ -245,7 +245,7 @@ module Api
       end
 
       test "GET index ANDs multiple label filters" do
-        get api_v1_secret_refs_url,
+        get api_v1_static_secrets_url,
             params: { namespace: "acme", labels: { team: "platform", env: "staging" } },
             headers: auth_headers
         assert_response :ok
@@ -255,7 +255,7 @@ module Api
       end
 
       test "GET index does not leak across namespaces" do
-        get api_v1_secret_refs_url,
+        get api_v1_static_secrets_url,
             params: { namespace: "acme", labels: { team: "platform", env: "prod" } },
             headers: auth_headers
         assert_response :ok
@@ -265,7 +265,7 @@ module Api
       end
 
       test "GET index returns an empty array when no labels match" do
-        get api_v1_secret_refs_url,
+        get api_v1_static_secrets_url,
             params: { namespace: "acme", labels: { env: "nowhere" } },
             headers: auth_headers
         assert_response :ok
@@ -273,9 +273,9 @@ module Api
       end
 
       test "GET index honors limit and page" do
-        total = StaticSecretRef.where(namespace: "acme").count
+        total = StaticSecret.where(namespace: "acme").count
 
-        get api_v1_secret_refs_url,
+        get api_v1_static_secrets_url,
             params: { namespace: "acme", limit: 1, page: 2 },
             headers: auth_headers
         assert_response :ok
@@ -298,9 +298,9 @@ module Api
           }
         }
 
-        assert_difference -> { StaticSecretRef.count } => 1,
+        assert_difference -> { StaticSecret.count } => 1,
                           -> { SecretSource.count } => 1 do
-          post api_v1_secret_refs_url, params: body.to_json, headers: auth_headers
+          post api_v1_static_secrets_url, params: body.to_json, headers: auth_headers
         end
         assert_response :created
 
@@ -309,17 +309,17 @@ module Api
         assert_not response.body.include?("plaintext-secret"), "secret must not appear in response"
         assert_nil data.dig("source", "secret")
 
-        ref = StaticSecretRef.find_by_oid!(data["id"])
+        ref = StaticSecret.find_by_oid!(data["id"])
         assert_equal "plaintext-secret", ref.source.secret
 
-        get api_v1_secret_ref_url(id: ref.oid), headers: auth_headers
+        get api_v1_static_secret_url(id: ref.oid), headers: auth_headers
         assert_response :ok
         assert_not response.body.include?("plaintext-secret"), "secret must not appear in GET response"
       end
 
       test "PUT rotates a control_plane source secret without exposing it" do
-        ref = static_secret_refs(:github_token_inject)
-        SecretSource.create!(source_type: "control_plane", secret: "old-secret", static_secret_ref: ref)
+        ref = static_secrets(:github_token_inject)
+        SecretSource.create!(source_type: "control_plane", secret: "old-secret", static_secret: ref)
 
         body = {
           data: {
@@ -330,7 +330,7 @@ module Api
           }
         }
 
-        put api_v1_secret_ref_url(id: ref.oid), params: body.to_json, headers: auth_headers
+        put api_v1_static_secret_url(id: ref.oid), params: body.to_json, headers: auth_headers
         assert_response :ok
 
         assert_not response.body.include?("new-secret"), "rotated secret must not appear in response"
@@ -347,14 +347,14 @@ module Api
           }
         }
 
-        assert_no_difference [ "StaticSecretRef.count", "SecretSource.count" ] do
-          post api_v1_secret_refs_url, params: body.to_json, headers: auth_headers
+        assert_no_difference [ "StaticSecret.count", "SecretSource.count" ] do
+          post api_v1_static_secrets_url, params: body.to_json, headers: auth_headers
         end
         assert_response :unprocessable_content
       end
 
       test "GET index clamps limit above the max" do
-        get api_v1_secret_refs_url,
+        get api_v1_static_secrets_url,
             params: { namespace: "acme", limit: 9999 },
             headers: auth_headers
         assert_response :ok

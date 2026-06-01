@@ -7,13 +7,13 @@ module Api
       end
 
       def create
-        attrs = data_params.permit(:principal_id, :static_secret_ref_id)
+        attrs = data_params.permit(:principal_id, :static_secret_id)
         principal = Principal.find_by_oid!(attrs[:principal_id])
-        static_secret_ref = StaticSecretRef.find_by_oid!(attrs[:static_secret_ref_id])
+        static_secret = StaticSecret.find_by_oid!(attrs[:static_secret_id])
 
         grant = Grant.create!(
           principal: principal,
-          static_secret_ref: static_secret_ref,
+          static_secret: static_secret,
           created_by: current_user
         )
         render status: :created, json: serialize(grant)
@@ -34,7 +34,7 @@ module Api
           data: {
             id: grant.oid,
             principal_id: grant.principal.oid,
-            static_secret_ref_id: grant.static_secret_ref.oid,
+            static_secret_id: grant.static_secret.oid,
             created_at: grant.created_at,
             updated_at: grant.updated_at
           }

@@ -61,8 +61,8 @@ class SecretSourceTest < ActiveSupport::TestCase
   end
 
   test "control_plane source secret round-trips through encryption" do
-    ref = static_secret_refs(:github_token_inject)
-    s = SecretSource.create!(source_type: "control_plane", secret: "rotated-secret", static_secret_ref: ref)
+    ref = static_secrets(:github_token_inject)
+    s = SecretSource.create!(source_type: "control_plane", secret: "rotated-secret", static_secret: ref)
     assert_equal "rotated-secret", SecretSource.find(s.id).secret
     raw = SecretSource.connection.select_value("SELECT secret FROM secret_sources WHERE id = #{s.id}")
     assert_not_equal "rotated-secret", raw, "expected ciphertext, not plaintext, at rest"

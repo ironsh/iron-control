@@ -1,4 +1,4 @@
-class StaticSecretRef < ApplicationRecord
+class StaticSecret < ApplicationRecord
   oid_prefix "ssr"
 
   has_many :grants, dependent: :destroy

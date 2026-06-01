@@ -40,7 +40,7 @@ module Api
         data = json_body.fetch("data")
         assert_equal grant.oid, data["id"]
         assert_equal grant.principal.oid, data["principal_id"]
-        assert_equal grant.static_secret_ref.oid, data["static_secret_ref_id"]
+        assert_equal grant.static_secret.oid, data["static_secret_id"]
       end
 
       test "GET returns 404 for an unknown oid" do
@@ -50,12 +50,12 @@ module Api
 
       test "POST creates a Grant" do
         principal = principals(:globex_user)
-        secret_ref = static_secret_refs(:github_token_inject)
+        secret_ref = static_secrets(:github_token_inject)
 
         body = {
           data: {
             principal_id: principal.oid,
-            static_secret_ref_id: secret_ref.oid
+            static_secret_id: secret_ref.oid
           }
         }
 
@@ -67,15 +67,15 @@ module Api
         data = json_body.fetch("data")
         assert_match(/\Agrant_/, data["id"])
         assert_equal principal.oid, data["principal_id"]
-        assert_equal secret_ref.oid, data["static_secret_ref_id"]
+        assert_equal secret_ref.oid, data["static_secret_id"]
       end
 
       test "POST returns 404 when principal_id is unknown" do
-        secret_ref = static_secret_refs(:github_token_inject)
+        secret_ref = static_secrets(:github_token_inject)
         body = {
           data: {
             principal_id: "prn_nope",
-            static_secret_ref_id: secret_ref.oid
+            static_secret_id: secret_ref.oid
           }
         }
 
@@ -85,12 +85,12 @@ module Api
         assert_response :not_found
       end
 
-      test "POST returns 404 when static_secret_ref_id is unknown" do
+      test "POST returns 404 when static_secret_id is unknown" do
         principal = principals(:globex_user)
         body = {
           data: {
             principal_id: principal.oid,
-            static_secret_ref_id: "ssr_nope"
+            static_secret_id: "ssr_nope"
           }
         }
 
