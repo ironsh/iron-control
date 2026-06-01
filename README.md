@@ -31,3 +31,9 @@ When deploying to Kubernetes, source these values from a `Secret`, not from a `C
 Generate suitable values with `bin/rails db:encryption:init` and store them in your secret manager. In production, the process refuses to boot if any of the three are missing. In `development` and `test`, fixed fallback values are used so the suite runs without configuration.
 
 Rotating any of these keys makes previously encrypted data unreadable. Treat them as long-lived secrets and back them up alongside other production credentials.
+
+## API
+
+`iron-control` exposes a JSON API under `/api/v1`. All resource endpoints authenticate with an API key sent as a bearer token (`Authorization: Bearer iak_...`); the one exception is `POST /api/v1/proxy/sync`, which `iron-proxy` instances call with a proxy bearer token.
+
+See [docs/API.md](docs/API.md) for the full reference: authentication, request/response conventions, pagination, error formats, the shared secret-source and request-rule shapes, and detailed payloads for every endpoint (static secrets, GCP auth secrets, OAuth token secrets, principals, grants, API keys, proxies, and proxy sync).
