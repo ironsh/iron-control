@@ -22,6 +22,10 @@ Rails.application.routes.draw do
       end
       resources :grants, only: %i[show create destroy]
       resources :api_keys, only: %i[index show create destroy]
+      resources :proxies, only: %i[index show create destroy]
+
+      # Called by iron-proxy instances (proxy bearer auth, not ApiKey auth).
+      post "proxy/sync", to: "proxy_sync#create"
     end
   end
 end
