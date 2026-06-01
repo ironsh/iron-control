@@ -6,14 +6,14 @@
 
 | Variable                          | Required | Description                                                                                              |
 | --------------------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
-| `IRON_BOOT_INITIAL_USER_EMAIL`    | yes      | Email for the initial user.                                                                              |
-| `IRON_BOOT_INITIAL_USER_PASSWORD` | yes      | Password for the initial user (minimum 12 characters).                                                   |
-| `IRON_BOOT_INITIAL_API_KEY`       | no       | Plaintext API key for the initial user. Must match `iak_` followed by 64 lowercase hex characters (a 32-byte hex string). If omitted, a token is generated and logged once at startup. |
+| `IRON_CONTROL_BOOT_INITIAL_USER_EMAIL`    | yes      | Email for the initial user.                                                                              |
+| `IRON_CONTROL_BOOT_INITIAL_USER_PASSWORD` | yes      | Password for the initial user (minimum 12 characters).                                                   |
+| `IRON_CONTROL_BOOT_INITIAL_API_KEY`       | no       | Plaintext API key for the initial user. Must match `iak_` followed by 64 lowercase hex characters (a 32-byte hex string). If omitted, a token is generated and logged once at startup. |
 
 Behavior:
 
 - Bootstrap runs after Rails initialization on every boot, but is a no-op if any user already exists. It is safe to leave the env vars set across rolling restarts.
-- If `IRON_BOOT_INITIAL_USER_EMAIL` is set without `IRON_BOOT_INITIAL_USER_PASSWORD`, the process exits with a clear error.
+- If `IRON_CONTROL_BOOT_INITIAL_USER_EMAIL` is set without `IRON_CONTROL_BOOT_INITIAL_USER_PASSWORD`, the process exits with a clear error.
 - Concurrent pods racing the first boot are serialized with a Postgres advisory lock; exactly one user is created.
 
 When deploying to Kubernetes, source these values from a `Secret`, not from a `ConfigMap`.
@@ -24,9 +24,9 @@ When deploying to Kubernetes, source these values from a `Secret`, not from a `C
 
 | Variable                                 | Required           | Description                                  |
 | ---------------------------------------- | ------------------ | -------------------------------------------- |
-| `IRON_AR_ENCRYPTION_PRIMARY_KEY`         | yes (in production) | Primary key used for non-deterministic encryption. |
-| `IRON_AR_ENCRYPTION_DETERMINISTIC_KEY`   | yes (in production) | Key used for deterministic encryption.       |
-| `IRON_AR_ENCRYPTION_KEY_DERIVATION_SALT` | yes (in production) | Salt used to derive per-attribute keys.      |
+| `IRON_CONTROL_AR_ENCRYPTION_PRIMARY_KEY`         | yes (in production) | Primary key used for non-deterministic encryption. |
+| `IRON_CONTROL_AR_ENCRYPTION_DETERMINISTIC_KEY`   | yes (in production) | Key used for deterministic encryption.       |
+| `IRON_CONTROL_AR_ENCRYPTION_KEY_DERIVATION_SALT` | yes (in production) | Salt used to derive per-attribute keys.      |
 
 Generate suitable values with `bin/rails db:encryption:init` and store them in your secret manager. In production, the process refuses to boot if any of the three are missing. In `development` and `test`, fixed fallback values are used so the suite runs without configuration.
 
