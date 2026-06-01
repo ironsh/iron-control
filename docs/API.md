@@ -1,0 +1,652 @@
+# iron-control API
+
+`iron-control` exposes a JSON API under `/api/v1`. Every resource endpoint requires API key authentication. The single exception is `POST /api/v1/proxy/sync`, which `iron-proxy` instances call with a proxy bearer token.
+
+- [Authentication](#authentication)
+- [Conventions](#conventions)
+- [Errors](#errors)
+- [Shared building blocks](#shared-building-blocks)
+  - [Secret sources](#secret-sources)
+  - [Request rules](#request-rules)
+- [Static secrets](#static-secrets)
+- [GCP auth secrets](#gcp-auth-secrets)
+- [OAuth token secrets](#oauth-token-secrets)
+- [Principals](#principals)
+- [Grants](#grants)
+- [API keys](#api-keys)
+- [Proxies](#proxies)
+- [Proxy sync](#proxy-sync)
+
+## Authentication
+
+Send your API key as a bearer token:
+
+```
+Authorization: Bearer iak_<64 lowercase hex chars>
+```
+
+API keys have the form `iak_` followed by 64 lowercase hex characters (a 32-byte hex string). The plaintext token is shown only once: when the key is created (or, for the bootstrap key, logged once at startup). Tokens are stored as SHA-256 hashes and cannot be recovered.
+
+A missing or invalid token returns `401`:
+
+```json
+{ "error": { "message": "invalid or missing API key" } }
+```
+
+`iron-proxy` instances authenticate to [`POST /api/v1/proxy/sync`](#proxy-sync) with their own token (`iprx_` followed by 64 lowercase hex characters), issued once when the proxy is created. An invalid proxy token returns `401` with `"invalid or missing proxy token"`.
+
+## Conventions
+
+- **Request bodies** wrap attributes in a top-level `data` object. A missing `data` key returns `400`.
+- **Single-resource responses** wrap the resource in `data`.
+- **List responses** include `data` (an array) and `meta` (pagination):
+
+  ```json
+  {
+    "data": [ /* ... */ ],
+    "meta": { "page": 1, "limit": 50, "total": 100, "total_pages": 2 }
+  }
+  ```
+
+- **Pagination** uses the `page` (default `1`) and `limit` (default `50`, max `200`) query parameters. Values are clamped into range; a non-integer value returns `400`.
+- **Namespaced list filtering** (static secrets, GCP auth secrets, OAuth token secrets, principals) requires a `namespace` query parameter and accepts an optional `labels[key]=value` filter that matches by JSONB containment (all supplied pairs must be present). Label values must be scalars.
+- **Object IDs** are prefixed by type: `ssr_` (static secret), `gas_` (GCP auth secret), `ots_` (OAuth token secret), `prn_` (principal), `grant_` (grant), `ak_` (API key), `prx_` (proxy).
+- **`namespace`** defaults to `"default"` when omitted on create. Once set, `namespace` and `foreign_id` are immutable.
+- **`namespace` and `foreign_id`** must be URL-safe: only `A-Z a-z 0-9 - . _ ~`. `foreign_id` is optional and, when set, must be unique within its namespace.
+- **`labels`** is an arbitrary string-keyed object (defaults to `{}`).
+- **Timestamps** are ISO 8601 UTC.
+
+## Errors
+
+Errors return an `error` object with a `message` and, for validation failures, a `details` map of field name to messages:
+
+```json
+{
+  "error": {
+    "message": "validation failed",
+    "details": {
+      "base": ["must define one of inject_config or replace_config"],
+      "name": ["can't be blank"]
+    }
+  }
+}
+```
+
+| Status | Meaning                                                  |
+| ------ | -------------------------------------------------------- |
+| `200`  | OK                                                       |
+| `201`  | Created                                                  |
+| `204`  | No Content (successful `DELETE`)                         |
+| `400`  | Bad Request (missing `data`, bad pagination/label query) |
+| `401`  | Unauthorized (missing or invalid token)                 |
+| `404`  | Not Found                                               |
+| `422`  | Unprocessable Entity (validation failed)                |
+
+## Shared building blocks
+
+### Secret sources
+
+A secret source describes where a credential value is resolved from. It appears as the `source` of a static secret, the `keyfile` of a GCP auth secret, and each entry in an OAuth token secret's `credentials` and `token_endpoint_headers` maps.
+
+Shape:
+
+```json
+{
+  "source_type": "env",
+  "config": { "var": "GITHUB_TOKEN" }
+}
+```
+
+`source_type` is required and immutable. `config` is an object whose allowed keys depend on the type. Unknown keys are rejected. Every type additionally accepts the optional keys `json_key` (extract one field from a JSON value) and `ttl` (cache lifetime).
+
+| `source_type`         | Required `config` keys | Type-specific optional keys | Notes |
+| --------------------- | ---------------------- | --------------------------- | ----- |
+| `env`                 | `var`                  | —                           | Reads a process environment variable. |
+| `aws_sm`              | `secret_id`            | `region`                    | AWS Secrets Manager. |
+| `aws_ssm`             | `name`                 | `region`, `with_decryption` | AWS SSM Parameter Store. |
+| `1password`           | `secret_ref`           | `token_env`                 | 1Password CLI / service account. |
+| `1password_connect`   | `secret_ref`           | `host_env`, `token_env`     | 1Password Connect server. |
+| `control_plane`       | — (no config keys)     | —                           | Value is supplied inline; see below. |
+| `token_broker`        | `credential_id`        | `failure_ttl`               | External token broker. |
+
+`control_plane` is special: the value is stored in iron-control itself. Supply it as a top-level `secret` field on the source (not inside `config`), and leave `config` empty:
+
+```json
+{
+  "source_type": "control_plane",
+  "secret": "the-actual-secret-value",
+  "config": {}
+}
+```
+
+The `secret` field is encrypted at rest, is write-only, and is never returned in any response. It is only permitted for `control_plane` sources; supplying it for any other type is a validation error, and omitting it for `control_plane` is also an error.
+
+### Request rules
+
+A rule scopes a credential to matching outbound requests. Rules appear as the `rules` array of static, GCP, and OAuth secrets.
+
+```json
+{
+  "host": "api.github.com",
+  "http_methods": ["GET", "POST"],
+  "paths": ["/repos/*"]
+}
+```
+
+| Field          | Type             | Notes |
+| -------------- | ---------------- | ----- |
+| `host`         | string           | Hostname to match. Exactly one of `host` or `cidr` is required. |
+| `cidr`         | string           | CIDR block to match (e.g. `10.0.0.0/8`). Must be a valid CIDR. |
+| `http_methods` | array of strings | Each must be one of `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`, `CONNECT`, or `*`. |
+| `paths`        | array of strings | Each must start with `/`. Glob patterns such as `/repos/*` are allowed. |
+
+Rules are positional: a `position` (0-based, assigned from array order) is returned in responses but is not part of the request. On update, the supplied `rules` array fully replaces the existing rules.
+
+## Static secrets
+
+A static secret injects or replaces a fixed credential value on matching requests. It has a single secret [source](#secret-sources) and a list of [rules](#request-rules), and defines exactly one of `inject_config` or `replace_config`.
+
+### Attributes
+
+| Field            | In requests | Notes |
+| ---------------- | ----------- | ----- |
+| `namespace`      | optional    | Defaults to `"default"`. Immutable after create. |
+| `foreign_id`     | optional    | Unique per namespace. Immutable after create. |
+| `name`           | optional    | |
+| `description`    | optional    | |
+| `labels`         | optional    | Object; defaults to `{}`. |
+| `inject_config`  | conditional | Define exactly one of `inject_config` / `replace_config`. |
+| `replace_config` | conditional | |
+| `source`         | optional    | A [secret source](#secret-sources). Replaced wholesale on update. |
+| `rules`          | optional    | Array of [rules](#request-rules). Replaced wholesale on update. |
+
+`inject_config` — inject the value into a request header or query parameter:
+
+```json
+{
+  "header": "Authorization",       // exactly one of header / query_param
+  "query_param": "api_key",
+  "formatter": "Bearer {{ .Value }}"  // optional template
+}
+```
+
+`replace_config` — replace an occurrence of a known placeholder in proxied traffic:
+
+```json
+{
+  "proxy_value": "__GITHUB_TOKEN__",   // required, non-empty
+  "match_headers": ["X-Token"],         // optional array of strings
+  "match_body": true,                    // optional booleans
+  "match_path": false,
+  "match_query": false,
+  "require": true
+}
+```
+
+Both config objects reject unknown keys.
+
+### Create
+
+`POST /api/v1/static_secrets`
+
+```json
+{
+  "data": {
+    "namespace": "default",
+    "foreign_id": "github-token",
+    "name": "GitHub Token",
+    "description": "Repo access",
+    "labels": { "team": "platform" },
+    "inject_config": { "header": "Authorization", "formatter": "Bearer {{ .Value }}" },
+    "source": { "source_type": "env", "config": { "var": "GITHUB_TOKEN" } },
+    "rules": [
+      { "host": "api.github.com", "http_methods": ["GET", "POST"], "paths": ["/repos/*"] }
+    ]
+  }
+}
+```
+
+Returns `201` with the created resource. Response shape:
+
+```json
+{
+  "data": {
+    "id": "ssr_...",
+    "namespace": "default",
+    "foreign_id": "github-token",
+    "name": "GitHub Token",
+    "description": "Repo access",
+    "labels": { "team": "platform" },
+    "inject_config": { "header": "Authorization", "formatter": "Bearer {{ .Value }}" },
+    "replace_config": null,
+    "source": { "source_type": "env", "config": { "var": "GITHUB_TOKEN" } },
+    "rules": [
+      { "host": "api.github.com", "cidr": null, "position": 0, "http_methods": ["GET", "POST"], "paths": ["/repos/*"] }
+    ],
+    "created_at": "2026-06-01T10:00:00Z",
+    "updated_at": "2026-06-01T10:00:00Z"
+  }
+}
+```
+
+The `source` in responses never includes a `control_plane` `secret` value.
+
+### Other operations
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| `GET`  | `/api/v1/static_secrets?namespace=default` | List. `namespace` required; `labels[k]=v` and pagination optional. |
+| `GET`  | `/api/v1/static_secrets/:id` | Fetch one. `404` if missing. |
+| `PUT`  | `/api/v1/static_secrets/:id` | Full update; same body as create. `source` and `rules` are replaced wholesale. |
+
+## GCP auth secrets
+
+A GCP auth secret mints short-lived GCP OAuth2 access tokens and injects them as `Authorization: Bearer`. It defines exactly one credential mechanism: either a `keyfile` [secret source](#secret-sources) (the service account JSON) or a `credentials_provider` (Application Default Credentials).
+
+### Attributes
+
+| Field                  | In requests | Notes |
+| ---------------------- | ----------- | ----- |
+| `namespace`            | optional    | Defaults to `"default"`. Immutable. |
+| `foreign_id`           | optional    | Unique per namespace. Immutable. |
+| `name`, `description`  | optional    | |
+| `labels`               | optional    | |
+| `scopes`               | required    | Non-empty array of non-empty strings (GCP OAuth scopes). |
+| `keyfile`              | conditional | A [secret source](#secret-sources). Define exactly one of `keyfile` / `credentials_provider`. |
+| `credentials_provider` | conditional | Object `{ "type": "workload_identity" }`. Only `workload_identity` is accepted. |
+| `subject`              | optional    | Email for domain-wide delegation. Only allowed with `keyfile`, not `credentials_provider`. |
+| `rules`               | optional    | Array of [rules](#request-rules). |
+
+### Create
+
+`POST /api/v1/gcp_auth_secrets`
+
+```json
+{
+  "data": {
+    "namespace": "default",
+    "foreign_id": "sa-prod",
+    "name": "Production Service Account",
+    "scopes": ["https://www.googleapis.com/auth/cloud-platform"],
+    "subject": "user@example.com",
+    "keyfile": {
+      "source_type": "aws_sm",
+      "config": { "secret_id": "gcp-sa-keyfile", "region": "us-west-2" }
+    },
+    "rules": [ { "host": "googleapis.com", "http_methods": ["*"], "paths": ["/v1/*"] } ]
+  }
+}
+```
+
+Or with workload identity instead of a keyfile:
+
+```json
+{
+  "data": {
+    "namespace": "default",
+    "scopes": ["https://www.googleapis.com/auth/cloud-platform"],
+    "credentials_provider": { "type": "workload_identity" },
+    "rules": [ { "host": "googleapis.com", "http_methods": ["*"], "paths": ["/v1/*"] } ]
+  }
+}
+```
+
+Returns `201`. Response shape:
+
+```json
+{
+  "data": {
+    "id": "gas_...",
+    "namespace": "default",
+    "foreign_id": "sa-prod",
+    "name": "Production Service Account",
+    "description": null,
+    "labels": {},
+    "credentials_provider": null,
+    "subject": "user@example.com",
+    "scopes": ["https://www.googleapis.com/auth/cloud-platform"],
+    "keyfile": { "source_type": "aws_sm", "config": { "secret_id": "gcp-sa-keyfile", "region": "us-west-2" } },
+    "rules": [ { "host": "googleapis.com", "cidr": null, "position": 0, "http_methods": ["*"], "paths": ["/v1/*"] } ],
+    "created_at": "2026-06-01T10:00:00Z",
+    "updated_at": "2026-06-01T10:00:00Z"
+  }
+}
+```
+
+### Other operations
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| `GET`  | `/api/v1/gcp_auth_secrets?namespace=default` | List. |
+| `GET`  | `/api/v1/gcp_auth_secrets/:id` | Fetch one. |
+| `PUT`  | `/api/v1/gcp_auth_secrets/:id` | Full update; same body as create. |
+
+## OAuth token secrets
+
+An OAuth token secret mints OAuth2 access tokens for a single grant and injects them as a bearer header. Each credential field and each token-endpoint header is its own [secret source](#secret-sources). At least one [rule](#request-rules) is required.
+
+### Attributes
+
+| Field                    | In requests | Notes |
+| ------------------------ | ----------- | ----- |
+| `namespace`              | optional    | Defaults to `"default"`. Immutable. |
+| `foreign_id`             | optional    | Unique per namespace. Immutable. |
+| `name`, `description`    | optional    | |
+| `labels`                 | optional    | |
+| `grant`                  | required    | One of `refresh_token`, `client_credentials`, `password`, `jwt_bearer`. |
+| `token_endpoint`         | required    | Token endpoint URL. |
+| `audience`               | conditional | Required when `grant` is `jwt_bearer`; otherwise optional. |
+| `scopes`                 | optional    | Array of strings. |
+| `header`                 | optional    | Header to inject the token into. |
+| `value_prefix`           | optional    | Prefix for the injected value (e.g. `Bearer`). |
+| `credentials`            | required    | Object mapping credential field → [secret source](#secret-sources). Required/allowed fields depend on `grant` (see below). |
+| `token_endpoint_headers` | optional    | Object mapping header name → [secret source](#secret-sources). |
+| `rules`                  | required    | At least one [rule](#request-rules). |
+
+Credential fields per grant:
+
+| `grant`              | Required credential fields           | Optional credential fields |
+| -------------------- | ------------------------------------ | -------------------------- |
+| `refresh_token`      | `refresh_token`, `client_id`         | `client_secret`            |
+| `client_credentials` | `client_id`, `client_secret`         | —                          |
+| `password`           | `username`, `password`, `client_id`  | `client_secret`            |
+| `jwt_bearer`         | `issuer`, `subject`, `private_key`   | `private_key_id`           |
+
+Supplying a credential field that the chosen grant does not use, or omitting a required one, is a validation error.
+
+### Create
+
+`POST /api/v1/oauth_token_secrets`
+
+```json
+{
+  "data": {
+    "namespace": "default",
+    "foreign_id": "slack-app",
+    "name": "Slack App OAuth",
+    "grant": "refresh_token",
+    "token_endpoint": "https://slack.com/api/oauth.v2.access",
+    "scopes": ["chat:write"],
+    "header": "Authorization",
+    "value_prefix": "Bearer",
+    "credentials": {
+      "client_id": { "source_type": "aws_ssm", "config": { "name": "/slack/client_id" } },
+      "client_secret": { "source_type": "aws_ssm", "config": { "name": "/slack/client_secret", "with_decryption": true } },
+      "refresh_token": { "source_type": "control_plane", "secret": "xoxe-1-...", "config": {} }
+    },
+    "token_endpoint_headers": {
+      "X-Auth": { "source_type": "env", "config": { "var": "SLACK_AUTH_HEADER" } }
+    },
+    "rules": [ { "host": "slack.com", "http_methods": ["POST"], "paths": ["/api/*"] } ]
+  }
+}
+```
+
+Returns `201`. Response shape (note that `credentials` and `token_endpoint_headers` echo each source as `{ source_type, config }`, never the underlying `secret`):
+
+```json
+{
+  "data": {
+    "id": "ots_...",
+    "namespace": "default",
+    "foreign_id": "slack-app",
+    "name": "Slack App OAuth",
+    "description": null,
+    "labels": {},
+    "grant": "refresh_token",
+    "token_endpoint": "https://slack.com/api/oauth.v2.access",
+    "audience": null,
+    "scopes": ["chat:write"],
+    "header": "Authorization",
+    "value_prefix": "Bearer",
+    "credentials": {
+      "client_id": { "source_type": "aws_ssm", "config": { "name": "/slack/client_id" } },
+      "client_secret": { "source_type": "aws_ssm", "config": { "name": "/slack/client_secret", "with_decryption": true } },
+      "refresh_token": { "source_type": "control_plane", "config": {} }
+    },
+    "token_endpoint_headers": {
+      "X-Auth": { "source_type": "env", "config": { "var": "SLACK_AUTH_HEADER" } }
+    },
+    "rules": [ { "host": "slack.com", "cidr": null, "position": 0, "http_methods": ["POST"], "paths": ["/api/*"] } ],
+    "created_at": "2026-06-01T10:00:00Z",
+    "updated_at": "2026-06-01T10:00:00Z"
+  }
+}
+```
+
+### Other operations
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| `GET`  | `/api/v1/oauth_token_secrets?namespace=default` | List. |
+| `GET`  | `/api/v1/oauth_token_secrets/:id` | Fetch one. |
+| `PUT`  | `/api/v1/oauth_token_secrets/:id` | Full update; same body as create. |
+
+## Principals
+
+A principal is an identity (an application, service, or proxy owner) that can be granted secrets.
+
+### Attributes
+
+| Field        | In requests | Notes |
+| ------------ | ----------- | ----- |
+| `namespace`  | optional    | Defaults to `"default"`. Immutable. |
+| `foreign_id` | optional    | Unique per namespace. Immutable. |
+| `name`       | optional    | |
+| `labels`     | optional    | |
+
+### Operations
+
+`POST /api/v1/principals`
+
+```json
+{ "data": { "namespace": "default", "foreign_id": "api-service", "name": "API Service", "labels": { "tier": "backend" } } }
+```
+
+Returns `201`:
+
+```json
+{
+  "data": {
+    "id": "prn_...",
+    "namespace": "default",
+    "foreign_id": "api-service",
+    "name": "API Service",
+    "labels": { "tier": "backend" },
+    "created_at": "2026-06-01T10:00:00Z",
+    "updated_at": "2026-06-01T10:00:00Z"
+  }
+}
+```
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| `GET`  | `/api/v1/principals?namespace=default` | List. |
+| `GET`  | `/api/v1/principals/:id` | Fetch one. |
+| `GET`  | `/api/v1/principals/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
+| `PUT`  | `/api/v1/principals/:id` | Update. Only `name` and `labels` are mutable; `namespace` and `foreign_id` are immutable and ignored. |
+
+## Grants
+
+A grant attaches exactly one secret to a principal. The principal's proxies then receive that secret through [proxy sync](#proxy-sync).
+
+### Create
+
+`POST /api/v1/grants` — supply `principal_id` plus exactly one of `static_secret_id`, `gcp_auth_secret_id`, or `oauth_token_secret_id`:
+
+```json
+{ "data": { "principal_id": "prn_...", "static_secret_id": "ssr_..." } }
+```
+
+Returns `201`. The response includes only the one secret-type key that was set:
+
+```json
+{
+  "data": {
+    "id": "grant_...",
+    "principal_id": "prn_...",
+    "static_secret_id": "ssr_...",
+    "created_at": "2026-06-01T10:00:00Z",
+    "updated_at": "2026-06-01T10:00:00Z"
+  }
+}
+```
+
+Referencing a missing principal or secret returns `404`. Supplying zero secret-type keys returns `422` with `"must reference one of static_secret_id, gcp_auth_secret_id, oauth_token_secret_id"`.
+
+### Other operations
+
+| Method   | Path | Notes |
+| -------- | ---- | ----- |
+| `GET`    | `/api/v1/grants/:id` | Fetch one. |
+| `DELETE` | `/api/v1/grants/:id` | Revoke. Returns `204`. |
+
+## API keys
+
+API keys belong to the authenticated user and authenticate API requests. They are scoped to the current user: listing and fetching only ever return your own keys.
+
+### Create
+
+`POST /api/v1/api_keys`
+
+```json
+{ "data": { "name": "CI Runner" } }
+```
+
+Returns `201`. The plaintext `token` is included **only** in this create response: save it immediately.
+
+```json
+{
+  "data": {
+    "id": "ak_...",
+    "name": "CI Runner",
+    "token": "iak_0a1b2c3d...",
+    "created_at": "2026-06-01T10:00:00Z",
+    "updated_at": "2026-06-01T10:00:00Z"
+  }
+}
+```
+
+`name` is required; omitting it returns `422`.
+
+### Other operations
+
+| Method   | Path | Notes |
+| -------- | ---- | ----- |
+| `GET`    | `/api/v1/api_keys` | List your keys (paginated; no `namespace`). Tokens are never returned. |
+| `GET`    | `/api/v1/api_keys/:id` | Fetch one (no token). |
+| `DELETE` | `/api/v1/api_keys/:id` | Revoke (soft delete). Returns `204`. Revoking the key used for the current request returns `422` with `"cannot revoke the API key used for this request"`. |
+
+## Proxies
+
+A proxy represents an `iron-proxy` instance, owned by a principal. It receives config for the secrets granted to that principal.
+
+### Create
+
+`POST /api/v1/proxies`
+
+```json
+{ "data": { "name": "Edge Proxy - US", "principal_id": "prn_..." } }
+```
+
+Returns `201`. The plaintext proxy `token` (`iprx_...`) is included **only** in this create response: save it immediately. The proxy uses it to authenticate to [proxy sync](#proxy-sync).
+
+```json
+{
+  "data": {
+    "id": "prx_...",
+    "name": "Edge Proxy - US",
+    "principal_id": "prn_...",
+    "token": "iprx_0a1b2c3d...",
+    "created_at": "2026-06-01T10:00:00Z",
+    "updated_at": "2026-06-01T10:00:00Z"
+  }
+}
+```
+
+`name` and `principal_id` are required; a missing principal returns `404`.
+
+### Other operations
+
+| Method   | Path | Notes |
+| -------- | ---- | ----- |
+| `GET`    | `/api/v1/proxies` | List. Optional `principal_id` filter; paginated. Tokens are never returned. |
+| `GET`    | `/api/v1/proxies/:id` | Fetch one (no token). |
+| `DELETE` | `/api/v1/proxies/:id` | Deregister. Returns `204`. |
+
+## Proxy sync
+
+`POST /api/v1/proxy/sync`
+
+Called by `iron-proxy` instances to fetch their configuration. **Authentication is the proxy bearer token** (`Authorization: Bearer iprx_...`), not an API key.
+
+The proxy sends the config hash it currently holds. If it matches the freshly computed hash, the server returns only the hash so the proxy skips re-applying. Otherwise the full payload is returned.
+
+Request:
+
+```json
+{ "config_hash": "sha256:0a1b2c3d..." }
+```
+
+`config_hash` is optional. It is an opaque, deterministic fingerprint of the config (the literal string `sha256:` followed by a hex digest); the proxy treats it as an ETag.
+
+Response when the hash matches (no payload):
+
+```json
+{ "config_hash": "sha256:..." }
+```
+
+Response when the hash differs (full payload):
+
+```json
+{
+  "config_hash": "sha256:...",
+  "secrets": [
+    {
+      "source": { "type": "env", "var": "GITHUB_TOKEN" },
+      "inject": { "header": "Authorization", "formatter": "Bearer {{ .Value }}" },
+      "rules": [ { "host": "api.github.com", "methods": ["GET", "POST"], "paths": ["/repos/*"] } ]
+    },
+    {
+      "source": { "type": "control_plane", "value": "s3cr3t" },
+      "replace": { "proxy_value": "__DB_PASSWORD__" },
+      "rules": [ { "host": "db.internal", "methods": ["*"] } ]
+    }
+  ],
+  "transforms": [
+    {
+      "name": "gcp_auth",
+      "config": {
+        "keyfile": { "type": "aws_sm", "secret_id": "gcp-sa-keyfile", "region": "us-west-2" },
+        "subject": "user@example.com",
+        "scopes": ["https://www.googleapis.com/auth/cloud-platform"],
+        "rules": [ { "host": "googleapis.com", "methods": ["*"], "paths": ["/v1/*"] } ]
+      }
+    },
+    {
+      "name": "oauth_token",
+      "config": {
+        "tokens": [
+          {
+            "grant": "refresh_token",
+            "token_endpoint": "https://slack.com/api/oauth.v2.access",
+            "client_id": { "type": "env", "var": "SLACK_CLIENT_ID" },
+            "refresh_token": { "type": "control_plane", "value": "xoxe-1-..." },
+            "scopes": ["chat:write"],
+            "header": "Authorization",
+            "value_prefix": "Bearer",
+            "rules": [ { "host": "slack.com", "methods": ["POST"], "paths": ["/api/*"] } ]
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+Notes on the proxy-sync payload, which differs from the REST representation:
+
+- `secrets` carries one entry per granted static secret that has a source (sourceless static secrets are skipped). `transforms` carries one `gcp_auth` transform per granted GCP auth secret and a single bundled `oauth_token` transform whose `config.tokens` lists every granted OAuth token secret.
+- Each source is flattened: its `config` keys are merged up and tagged with `type` (the `source_type`). A `control_plane` source delivers its decrypted value inline as `value`.
+- Rules use `methods` here, versus `http_methods` in the REST API. Blank rule fields are omitted.
+- The top-level `rules`, `mcp`, and `ingest_token` fields the proxy also understands are intentionally omitted; iron-control has no models for them. Rules are carried per secret instead.
