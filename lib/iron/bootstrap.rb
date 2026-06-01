@@ -7,15 +7,15 @@ module Iron
     module_function
 
     def run!(logger: Rails.logger)
-      email = ENV["IRON_CONTROL_BOOT_INITIAL_USER_EMAIL"].to_s.strip
+      email = ENV["IRON_CONTROL_INITIAL_USER_EMAIL"].to_s.strip
       return if email.empty?
 
-      password = ENV["IRON_CONTROL_BOOT_INITIAL_USER_PASSWORD"].to_s
+      password = ENV["IRON_CONTROL_INITIAL_USER_PASSWORD"].to_s
       if password.empty?
-        raise Error, "IRON_CONTROL_BOOT_INITIAL_USER_EMAIL is set but IRON_CONTROL_BOOT_INITIAL_USER_PASSWORD is missing"
+        raise Error, "IRON_CONTROL_INITIAL_USER_EMAIL is set but IRON_CONTROL_INITIAL_USER_PASSWORD is missing"
       end
 
-      supplied_token = ENV["IRON_CONTROL_BOOT_INITIAL_API_KEY"].to_s
+      supplied_token = ENV["IRON_CONTROL_INITIAL_API_KEY"].to_s
 
       return unless ActiveRecord::Base.connection.data_source_exists?("users")
 
