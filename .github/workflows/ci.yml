@@ -92,10 +92,10 @@ jobs:
       - name: Run tests
         env:
           RAILS_ENV: test
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USERNAME: postgres
-          DB_PASSWORD: postgres
+          IRON_CONTROL_DB_HOST: localhost
+          IRON_CONTROL_DB_PORT: 5432
+          IRON_CONTROL_DB_USERNAME: postgres
+          IRON_CONTROL_DB_PASSWORD: postgres
           # RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}
         run: bin/rails db:test:prepare test
 
@@ -126,10 +126,10 @@ jobs:
       - name: Run System Tests
         env:
           RAILS_ENV: test
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USERNAME: postgres
-          DB_PASSWORD: postgres
+          IRON_CONTROL_DB_HOST: localhost
+          IRON_CONTROL_DB_PORT: 5432
+          IRON_CONTROL_DB_USERNAME: postgres
+          IRON_CONTROL_DB_PASSWORD: postgres
           # RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}
         run: bin/rails db:test:prepare test:system
 
