@@ -13,16 +13,19 @@ module Api
 
       def create
         ref = GcpAuthSecret.new(created_by: current_user)
-        upsert!(ref, data_params)
+        assign_and_save!(ref, data_params)
         render status: :created, json: { data: record_payload(ref) }
       rescue ActiveRecord::RecordInvalid => e
         render_validation_error(e.record)
       end
 
+      # PUT/PATCH upserts: an opaque id updates that record, any other identifier
+      # is a foreign_id that is created when absent.
       def update
-        ref = GcpAuthSecret.find_by_oid!(params[:id])
-        upsert!(ref, data_params)
-        render json: { data: record_payload(ref) }
+        ref = resolve_for_upsert(GcpAuthSecret)
+        was_new = ref.new_record?
+        assign_and_save!(ref, data_params)
+        render status: (was_new ? :created : :ok), json: { data: record_payload(ref) }
       rescue ActiveRecord::RecordInvalid => e
         render_validation_error(e.record)
       end
@@ -31,10 +34,14 @@ module Api
 
       # Builds the whole credential graph in memory and saves once so the
       # cross-record validations (exactly_one_credential) see the keyfile source.
-      def upsert!(ref, attrs)
+      def assign_and_save!(ref, attrs)
         base = attrs.permit(:namespace, :foreign_id, :name, :description, :subject,
                             labels: {}, credentials_provider: {}, scopes: [])
-        base[:namespace] = "default" if ref.new_record? && base[:namespace].blank?
+        # A PUT upsert by foreign_id sets identity on the record before
+        # assignment; a blank body value must not wipe it.
+        base.delete(:foreign_id) if base[:foreign_id].blank? && ref.foreign_id.present?
+        base.delete(:namespace) if base[:namespace].blank? && ref.namespace.present?
+        base[:namespace] = "default" if base[:namespace].blank? && ref.namespace.blank?
 
         keyfile_attrs = if attrs.key?(:keyfile) && attrs[:keyfile].present?
           attrs.require(:keyfile).permit(:source_type, :secret, config: {})

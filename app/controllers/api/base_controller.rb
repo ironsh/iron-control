@@ -46,6 +46,32 @@ module Api
       params.require(:data)
     end
 
+    # Namespace for a create/upsert write, taken from the request body
+    # (defaults to "default"), matching the create path.
+    def upsert_namespace
+      data_params[:namespace].presence || "default"
+    end
+
+    # Resolves the target of a PUT/PATCH write so the verb behaves as an upsert.
+    #
+    # When :id is an opaque id for this model it must reference an existing
+    # record (update only; ActiveRecord::RecordNotFound otherwise). Any other
+    # value is treated as a foreign_id within the body namespace and the record
+    # is initialized when absent, so a PUT to a foreign_id creates it. The
+    # identity columns come from the URL/body here rather than mass assignment,
+    # and a foreign_id can never start with the opaque-id prefix (model
+    # validation), so the two identifier forms stay unambiguous.
+    def resolve_for_upsert(model)
+      identifier = params[:id].to_s
+      if identifier.start_with?("#{model.oid_prefix}_")
+        model.find_by_oid!(identifier)
+      else
+        record = model.find_or_initialize_by(namespace: upsert_namespace, foreign_id: identifier)
+        record.created_by = current_user if record.new_record?
+        record
+      end
+    end
+
     DEFAULT_PAGE_LIMIT = 50
     MAX_PAGE_LIMIT = 200
 

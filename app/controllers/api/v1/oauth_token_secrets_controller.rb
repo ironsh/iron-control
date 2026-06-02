@@ -13,16 +13,19 @@ module Api
 
       def create
         ref = OauthTokenSecret.new(created_by: current_user)
-        upsert!(ref, data_params)
+        assign_and_save!(ref, data_params)
         render status: :created, json: { data: record_payload(ref) }
       rescue ActiveRecord::RecordInvalid => e
         render_validation_error(e.record)
       end
 
+      # PUT/PATCH upserts: an opaque id updates that record, any other identifier
+      # is a foreign_id that is created when absent.
       def update
-        ref = OauthTokenSecret.find_by_oid!(params[:id])
-        upsert!(ref, data_params)
-        render json: { data: record_payload(ref) }
+        ref = resolve_for_upsert(OauthTokenSecret)
+        was_new = ref.new_record?
+        assign_and_save!(ref, data_params)
+        render status: (was_new ? :created : :ok), json: { data: record_payload(ref) }
       rescue ActiveRecord::RecordInvalid => e
         render_validation_error(e.record)
       end
@@ -31,11 +34,15 @@ module Api
 
       # Builds the whole credential graph in memory and saves once so the
       # per-grant field validations see every credential source at validation time.
-      def upsert!(ref, attrs)
+      def assign_and_save!(ref, attrs)
         base = attrs.permit(:namespace, :foreign_id, :name, :description,
                             :grant, :token_endpoint, :audience, :header, :value_prefix,
                             labels: {}, scopes: [])
-        base[:namespace] = "default" if ref.new_record? && base[:namespace].blank?
+        # A PUT upsert by foreign_id sets identity on the record before
+        # assignment; a blank body value must not wipe it.
+        base.delete(:foreign_id) if base[:foreign_id].blank? && ref.foreign_id.present?
+        base.delete(:namespace) if base[:namespace].blank? && ref.namespace.present?
+        base[:namespace] = "default" if base[:namespace].blank? && ref.namespace.blank?
 
         sources = build_credential_sources(attrs) + build_header_sources(attrs)
         rules_attrs = build_rules(attrs)

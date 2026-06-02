@@ -28,6 +28,12 @@ class StaticSecretTest < ActiveSupport::TestCase
     assert StaticSecret.new(valid_replace_attrs).valid?
   end
 
+  test "rejects a foreign_id that starts with the opaque id prefix" do
+    ref = StaticSecret.new(valid_inject_attrs(foreign_id: "ssr_abc123"))
+    assert_not ref.valid?
+    assert_includes ref.errors[:foreign_id], "must not start with \"ssr_\", which is reserved for opaque ids"
+  end
+
   test "namespace defaults to 'default' and is valid with no foreign_id or name" do
     ref = StaticSecret.new(
       inject_config: { "header" => "Authorization" },

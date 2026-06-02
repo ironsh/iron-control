@@ -80,6 +80,42 @@ module Api
         assert_equal "acme", role.namespace
       end
 
+      test "PUT by an unknown opaque id returns 404" do
+        put api_v1_role_url(id: "role_nope"), params: { data: { name: "x" } }.to_json, headers: auth_headers
+        assert_response :not_found
+      end
+
+      test "PUT upserts a new role by foreign_id" do
+        body = { data: { namespace: "acme", name: "Edge" } }
+        assert_difference -> { Role.count } => 1 do
+          put api_v1_role_url(id: "edge"), params: body.to_json, headers: auth_headers
+        end
+        assert_response :created
+
+        data = json_body.fetch("data")
+        assert_match(/\Arole_/, data["id"])
+        assert_equal "acme", data["namespace"]
+        assert_equal "edge", data["foreign_id"]
+        assert_equal "Edge", data["name"]
+      end
+
+      test "PUT by foreign_id updates an existing role without creating" do
+        role = roles(:acme_infra)
+        body = { data: { namespace: "acme", name: "Renamed" } }
+        assert_no_difference -> { Role.count } do
+          put api_v1_role_url(id: "infra"), params: body.to_json, headers: auth_headers
+        end
+        assert_response :ok
+        assert_equal "Renamed", role.reload.name
+      end
+
+      test "PUT upsert defaults the namespace when omitted" do
+        body = { data: { name: "Defaulted" } }
+        put api_v1_role_url(id: "defaulted"), params: body.to_json, headers: auth_headers
+        assert_response :created
+        assert_equal "default", json_body.dig("data", "namespace")
+      end
+
       test "DELETE removes a role" do
         role = roles(:acme_admin_role)
         assert_difference -> { Role.count } => -1 do

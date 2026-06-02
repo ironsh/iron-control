@@ -13,28 +13,35 @@ module Api
 
       def create
         ref = StaticSecret.new(created_by: current_user)
-        upsert!(ref, data_params)
+        assign_and_save!(ref, data_params)
         render status: :created, json: { data: record_payload(ref) }
       rescue ActiveRecord::RecordInvalid => e
         render_validation_error(e.record)
       end
 
+      # PUT/PATCH upserts: an opaque id updates that record, any other identifier
+      # is a foreign_id that is created when absent.
       def update
-        ref = StaticSecret.find_by_oid!(params[:id])
-        upsert!(ref, data_params)
-        render json: { data: record_payload(ref) }
+        ref = resolve_for_upsert(StaticSecret)
+        was_new = ref.new_record?
+        assign_and_save!(ref, data_params)
+        render status: (was_new ? :created : :ok), json: { data: record_payload(ref) }
       rescue ActiveRecord::RecordInvalid => e
         render_validation_error(e.record)
       end
 
       private
 
-      def upsert!(ref, attrs)
+      def assign_and_save!(ref, attrs)
         ss_attrs = attrs.permit(
           :namespace, :foreign_id, :name, :description,
           labels: {}, inject_config: {}, replace_config: {}
         )
-        ss_attrs[:namespace] = "default" if ref.new_record? && ss_attrs[:namespace].blank?
+        # A PUT upsert by foreign_id sets identity on the record before
+        # assignment; a blank body value must not wipe it.
+        ss_attrs.delete(:foreign_id) if ss_attrs[:foreign_id].blank? && ref.foreign_id.present?
+        ss_attrs.delete(:namespace) if ss_attrs[:namespace].blank? && ref.namespace.present?
+        ss_attrs[:namespace] = "default" if ss_attrs[:namespace].blank? && ref.namespace.blank?
 
         source_attrs = if attrs.key?(:source) && attrs[:source].present?
           attrs.require(:source).permit(:source_type, :secret, config: {})

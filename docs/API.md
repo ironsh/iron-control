@@ -50,10 +50,19 @@ A missing or invalid token returns `401`:
   ```
 
 - **Pagination** uses the `page` (default `1`) and `limit` (default `50`, max `200`) query parameters. Values are clamped into range; a non-integer value returns `400`.
-- **Namespaced list filtering** (static secrets, GCP auth secrets, OAuth token secrets, principals) requires a `namespace` query parameter and accepts an optional `labels[key]=value` filter that matches by JSONB containment (all supplied pairs must be present). Label values must be scalars.
+- **Namespaced list filtering** (static secrets, GCP auth secrets, OAuth token secrets, principals, roles) requires a `namespace` query parameter and accepts an optional `labels[key]=value` filter that matches by JSONB containment (all supplied pairs must be present). Label values must be scalars.
 - **Object IDs** are prefixed by type: `ssr_` (static secret), `gas_` (GCP auth secret), `ots_` (OAuth token secret), `prn_` (principal), `role_` (role), `grant_` (grant), `ak_` (API key), `prx_` (proxy).
 - **`namespace`** defaults to `"default"` when omitted on create. Once set, `namespace` and `foreign_id` are immutable.
-- **`namespace` and `foreign_id`** must be URL-safe: only `A-Z a-z 0-9 - . _ ~`. `foreign_id` is optional and, when set, must be unique within its namespace.
+- **`namespace` and `foreign_id`** must be URL-safe: only `A-Z a-z 0-9 - . _ ~`. `foreign_id` is optional and, when set, must be unique within its namespace. A `foreign_id` may not start with the resource's opaque-id prefix (e.g. `ssr_`), so it can never be mistaken for an OID.
+
+### Upsert (`PUT` / `PATCH`)
+
+For the resources with a `foreign_id` (static secrets, GCP auth secrets, OAuth token secrets, principals, roles), `PUT`/`PATCH /api/v1/<resource>/:id` is an **upsert**, and `:id` may be either an OID or a `foreign_id`:
+
+- **`:id` is an OID** (it starts with the resource's prefix, e.g. `ssr_…`): updates that record. `404` if it does not exist — an OID is server-assigned, so it can't be created at a chosen value.
+- **`:id` is anything else**: it is treated as a `foreign_id` within the body `namespace` (default `"default"`). The record is **updated if it exists, created if it does not**. Creation responds `201`; update responds `200`.
+
+This makes provisioning idempotent: `PUT /api/v1/roles/infra` with `{"data":{"namespace":"acme", …}}` converges the `acme/infra` role whether or not it already exists, in one call. On the foreign-id form the namespace and foreign_id come from the URL/body, so omitting `foreign_id` from the body does not clear it.
 - **`labels`** is an arbitrary string-keyed object (defaults to `{}`).
 - **Timestamps** are ISO 8601 UTC.
 
@@ -238,7 +247,7 @@ The `source` in responses never includes a `control_plane` `secret` value.
 | ------ | ---- | ----- |
 | `GET`  | `/api/v1/static_secrets?namespace=default` | List. `namespace` required; `labels[k]=v` and pagination optional. |
 | `GET`  | `/api/v1/static_secrets/:id` | Fetch one. `404` if missing. |
-| `PUT`  | `/api/v1/static_secrets/:id` | Full update; same body as create. `source` and `rules` are replaced wholesale. |
+| `PUT`/`PATCH` | `/api/v1/static_secrets/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`; same body as create. `source` and `rules` are replaced wholesale. |
 
 ## GCP auth secrets
 
@@ -320,7 +329,7 @@ Returns `201`. Response shape:
 | ------ | ---- | ----- |
 | `GET`  | `/api/v1/gcp_auth_secrets?namespace=default` | List. |
 | `GET`  | `/api/v1/gcp_auth_secrets/:id` | Fetch one. |
-| `PUT`  | `/api/v1/gcp_auth_secrets/:id` | Full update; same body as create. |
+| `PUT`/`PATCH` | `/api/v1/gcp_auth_secrets/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`; same body as create. |
 
 ## OAuth token secrets
 
@@ -421,7 +430,7 @@ Returns `201`. Response shape (note that `credentials` and `token_endpoint_heade
 | ------ | ---- | ----- |
 | `GET`  | `/api/v1/oauth_token_secrets?namespace=default` | List. |
 | `GET`  | `/api/v1/oauth_token_secrets/:id` | Fetch one. |
-| `PUT`  | `/api/v1/oauth_token_secrets/:id` | Full update; same body as create. |
+| `PUT`/`PATCH` | `/api/v1/oauth_token_secrets/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`; same body as create. |
 
 ## Principals
 
@@ -465,7 +474,7 @@ Returns `201`:
 | `GET`  | `/api/v1/principals?namespace=default` | List. |
 | `GET`  | `/api/v1/principals/:id` | Fetch one. |
 | `GET`  | `/api/v1/principals/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
-| `PUT`  | `/api/v1/principals/:id` | Update. Only `name` and `labels` are mutable; `namespace` and `foreign_id` are immutable and ignored. |
+| `PUT`/`PATCH` | `/api/v1/principals/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`. Only `name` and `labels` are mutable on an existing record; `namespace`/`foreign_id` apply only when creating. |
 
 See [Role assignments](#role-assignments) for attaching roles to a principal.
 
@@ -513,7 +522,7 @@ Returns `201`:
 | `GET`    | `/api/v1/roles?namespace=default` | List. `namespace` required; `labels[k]=v` and pagination optional. |
 | `GET`    | `/api/v1/roles/:id` | Fetch one. |
 | `GET`    | `/api/v1/roles/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
-| `PUT`    | `/api/v1/roles/:id` | Update. Only `name` and `labels` are mutable. |
+| `PUT`/`PATCH` | `/api/v1/roles/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`. Only `name` and `labels` are mutable on an existing record; `namespace`/`foreign_id` apply only when creating. |
 | `DELETE` | `/api/v1/roles/:id` | Delete. Returns `204`. Cascades: the role's grants and its assignments are removed. |
 
 ### Role assignments

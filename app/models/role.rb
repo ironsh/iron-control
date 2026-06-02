@@ -1,6 +1,8 @@
 class Role < ApplicationRecord
   oid_prefix "role"
 
+  include ForeignIdCollisionGuard
+
   attr_readonly :namespace, :foreign_id
 
   has_many :grants, dependent: :destroy
