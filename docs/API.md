@@ -622,7 +622,9 @@ Returns `201`. The plaintext `token` is included **only** in this create respons
 
 ## Proxies
 
-A proxy represents an `iron-proxy` instance, owned by a principal. It receives config for the secrets granted to that principal.
+A proxy represents an `iron-proxy` instance. It may be assigned a principal, in which case it receives config for the secrets granted to that principal. A proxy can also boot **unassigned**: it authenticates and syncs normally but receives an empty config until a principal is assigned. The principal can be assigned, swapped, or cleared at any time without reissuing the token.
+
+A proxy's `status` is `assigned` when it currently holds a principal and `unassigned` otherwise. `principal_assigned_at` records when the current assignment was made (`null` while unassigned).
 
 ### Create
 
@@ -640,14 +642,25 @@ Returns `201`. The plaintext proxy `token` (`iprx_...`) is included **only** in 
     "id": "prx_...",
     "name": "Edge Proxy - US",
     "principal_id": "prn_...",
-    "token": "iprx_0a1b2c3d...",
+    "status": "assigned",
+    "principal_assigned_at": "2026-06-01T10:00:00Z",
     "created_at": "2026-06-01T10:00:00Z",
     "updated_at": "2026-06-01T10:00:00Z"
   }
 }
 ```
 
-`name` and `principal_id` are required; a missing principal returns `404`.
+`name` is required. `principal_id` is optional: omit it to create an unassigned proxy (`status` is then `unassigned`, `principal_id` and `principal_assigned_at` are `null`). When supplied, a missing principal returns `404`.
+
+### Assign, swap, or clear the principal
+
+`PATCH /api/v1/proxies/:id` (or `PUT`)
+
+```json
+{ "data": { "principal_id": "prn_..." } }
+```
+
+Assigns the principal when the proxy is unassigned, or swaps it when already assigned. The token is unchanged; the proxy picks up the new config on its next [sync](#proxy-sync). Send `"principal_id": null` to unassign. Omitting `principal_id` leaves the assignment unchanged; `name` may also be updated. A missing principal returns `404`. Returns `200` with the updated proxy.
 
 ### Other operations
 
@@ -656,6 +669,8 @@ Returns `201`. The plaintext proxy `token` (`iprx_...`) is included **only** in 
 | `GET`    | `/api/v1/proxies` | List. Optional `principal_id` filter; paginated. Tokens are never returned. |
 | `GET`    | `/api/v1/proxies/:id` | Fetch one (no token). |
 | `DELETE` | `/api/v1/proxies/:id` | Deregister. Returns `204`. |
+
+Deleting a principal does not delete its proxies: they become unassigned and can be reassigned.
 
 ## Proxy sync
 
@@ -684,6 +699,8 @@ Response when the hash differs (full payload):
 ```json
 {
   "config_hash": "sha256:...",
+  "status": "assigned",
+  "principal_id": "prn_...",
   "secrets": [
     {
       "source": { "type": "env", "var": "GITHUB_TOKEN" },
@@ -729,6 +746,8 @@ Response when the hash differs (full payload):
 
 Notes on the proxy-sync payload, which differs from the REST representation:
 
+- `status` is `assigned` or `unassigned`, and `principal_id` is the assigned principal (or `null`). An unassigned proxy gets a valid response with `status: "unassigned"` and empty `secrets`/`transforms`, which is distinct from an assigned proxy whose config is genuinely empty. These fields appear only in the full payload (not the hash-only response).
+- The config hash incorporates the principal assignment, so assigning, swapping, or clearing the principal always changes the hash and the proxy refetches. A swap is a full replacement: the proxy should drop the previously delivered config rather than merge.
 - The delivered config covers the proxy's principal's **effective grants**: secrets granted to the principal directly plus those granted to any [role](#roles) it holds. A secret reachable through more than one path appears once.
 - `secrets` carries one entry per granted static secret that has a source (sourceless static secrets are skipped). `transforms` carries one `gcp_auth` transform per granted GCP auth secret and a single bundled `oauth_token` transform whose `config.tokens` lists every granted OAuth token secret.
 - Each source is flattened: its `config` keys are merged up and tagged with `type` (the `source_type`). A `control_plane` source delivers its decrypted value inline as `value`.

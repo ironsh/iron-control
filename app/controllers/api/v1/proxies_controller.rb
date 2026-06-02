@@ -24,10 +24,27 @@ module Api
 
       def create
         attrs = data_params.permit(:name, :principal_id)
-        principal = Principal.find_by_oid!(attrs[:principal_id])
+        # principal_id is optional: a proxy may boot unassigned and be assigned later.
+        principal = attrs[:principal_id].present? ? Principal.find_by_oid!(attrs[:principal_id]) : nil
         proxy = ::Proxy.new(name: attrs[:name], principal: principal)
         proxy.save!
         render status: :created, json: { data: record_payload(proxy).merge(token: proxy.token) }
+      rescue ActiveRecord::RecordInvalid => e
+        render_validation_error(e.record)
+      end
+
+      # PATCH/PUT assigns, swaps, or clears the proxy's principal on the fly. A
+      # principal_id of null unassigns; an opaque id assigns or swaps; omitting
+      # the key leaves the assignment unchanged. The token never changes.
+      def update
+        proxy = ::Proxy.find_by_oid!(params[:id])
+        if data_params.key?(:principal_id)
+          oid = data_params[:principal_id]
+          proxy.principal = oid.present? ? Principal.find_by_oid!(oid) : nil
+        end
+        proxy.name = data_params[:name] if data_params.key?(:name)
+        proxy.save!
+        render json: { data: record_payload(proxy) }
       rescue ActiveRecord::RecordInvalid => e
         render_validation_error(e.record)
       end
@@ -48,7 +65,9 @@ module Api
         {
           id: proxy.oid,
           name: proxy.name,
-          principal_id: proxy.principal.oid,
+          principal_id: proxy.principal&.oid,
+          status: proxy.status,
+          principal_assigned_at: proxy.principal_assigned_at,
           created_at: proxy.created_at,
           updated_at: proxy.updated_at
         }

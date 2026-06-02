@@ -20,10 +20,38 @@ class ProxyTest < ActiveSupport::TestCase
     assert_includes proxy.errors[:name], "can't be blank"
   end
 
-  test "requires principal" do
+  test "is valid without a principal (boots unassigned)" do
     proxy = Proxy.new(valid_attrs(principal: nil))
-    assert_not proxy.valid?
-    assert_includes proxy.errors[:principal], "must exist"
+    assert proxy.valid?
+    assert_equal "unassigned", proxy.status
+    refute proxy.assigned?
+  end
+
+  test "stamps principal_assigned_at when a principal is assigned and clears it on unassign" do
+    proxy = Proxy.create!(name: "lifecycle", principal: nil)
+    assert_nil proxy.principal_assigned_at
+
+    proxy.update!(principal: principals(:globex_user))
+    assert proxy.assigned?
+    refute_nil proxy.principal_assigned_at
+
+    proxy.update!(principal: nil)
+    assert_nil proxy.principal_assigned_at
+    assert_equal "unassigned", proxy.status
+  end
+
+  test "an unassigned proxy delivers an empty config" do
+    proxy = Proxy.create!(name: "idle", principal: nil)
+    assert_empty proxy.sync_secrets
+    assert_empty proxy.sync_transforms
+    assert_empty proxy.granted_static_secrets
+  end
+
+  test "config_hash changes when the principal is swapped" do
+    proxy = Proxy.create!(name: "swap", principal: principals(:globex_user))
+    before = proxy.config_hash
+    proxy.update!(principal: principals(:acme_channel))
+    refute_equal before, proxy.config_hash
   end
 
   test "declares prx as its oid prefix" do

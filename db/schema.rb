@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_02_041006) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_02_050000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -107,7 +107,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_02_041006) do
     t.string "bearer_token_hash", null: false
     t.datetime "created_at", null: false
     t.string "name", null: false
-    t.bigint "principal_id", null: false
+    t.datetime "principal_assigned_at"
+    t.bigint "principal_id"
     t.datetime "updated_at", null: false
     t.index ["principal_id"], name: "index_proxies_on_principal_id"
   end
@@ -197,7 +198,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_02_041006) do
   add_foreign_key "principal_roles", "principals"
   add_foreign_key "principal_roles", "roles"
   add_foreign_key "principals", "users", column: "created_by_id"
-  add_foreign_key "proxies", "principals"
+  add_foreign_key "proxies", "principals", on_delete: :nullify
   add_foreign_key "request_rules", "gcp_auth_secrets"
   add_foreign_key "request_rules", "oauth_token_secrets"
   add_foreign_key "request_rules", "static_secrets"

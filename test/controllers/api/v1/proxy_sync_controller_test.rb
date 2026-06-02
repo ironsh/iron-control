@@ -139,4 +139,23 @@ class ProxySyncControllerTest < ActionDispatch::IntegrationTest
     assert_response :ok
     assert_equal [], json_body.fetch("transforms")
   end
+
+  test "an unassigned proxy syncs an empty config with unassigned status" do
+    unassigned_token = "iprx_#{'c' * 64}"
+    post api_v1_proxy_sync_url, params: {}.to_json, headers: auth_headers(unassigned_token)
+    assert_response :ok
+
+    body = json_body
+    assert_equal "unassigned", body.fetch("status")
+    assert_nil body.fetch("principal_id")
+    assert_empty body.fetch("secrets")
+    assert_empty body.fetch("transforms")
+  end
+
+  test "sync reports the assigned principal and status" do
+    post api_v1_proxy_sync_url, params: {}.to_json, headers: auth_headers
+    assert_response :ok
+    assert_equal "assigned", json_body.fetch("status")
+    assert_equal @proxy.principal.oid, json_body.fetch("principal_id")
+  end
 end
