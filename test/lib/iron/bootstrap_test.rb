@@ -8,6 +8,7 @@ class Iron::BootstrapTest < ActiveSupport::TestCase
   setup do
     # bootstrap guard checks `User.exists?`; clear fixture-loaded users (and their dependents) so we exercise the empty-DB code path
     Grant.delete_all
+    PrincipalRole.delete_all
     Proxy.delete_all
     RequestRule.delete_all
     SecretSource.delete_all
@@ -15,6 +16,7 @@ class Iron::BootstrapTest < ActiveSupport::TestCase
     GcpAuthSecret.delete_all
     OauthTokenSecret.delete_all
     Principal.delete_all
+    Role.delete_all
     ApiKey.unscoped.delete_all
     User.delete_all
     @env = ENV.to_hash.slice(

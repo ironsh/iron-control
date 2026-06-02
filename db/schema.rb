@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_01_174025) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_02_041006) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -48,13 +48,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_01_174025) do
     t.bigint "created_by_id", null: false
     t.bigint "gcp_auth_secret_id"
     t.bigint "oauth_token_secret_id"
-    t.bigint "principal_id", null: false
+    t.bigint "principal_id"
+    t.bigint "role_id"
     t.bigint "static_secret_id"
     t.datetime "updated_at", null: false
     t.index ["created_by_id"], name: "index_grants_on_created_by_id"
     t.index ["gcp_auth_secret_id"], name: "index_grants_on_gcp_auth_secret_id"
     t.index ["oauth_token_secret_id"], name: "index_grants_on_oauth_token_secret_id"
     t.index ["principal_id"], name: "index_grants_on_principal_id"
+    t.index ["role_id"], name: "index_grants_on_role_id"
     t.index ["static_secret_id"], name: "index_grants_on_static_secret_id"
   end
 
@@ -76,6 +78,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_01_174025) do
     t.index ["created_by_id"], name: "index_oauth_token_secrets_on_created_by_id"
     t.index ["labels"], name: "index_oauth_token_secrets_on_labels", using: :gin
     t.index ["namespace", "foreign_id"], name: "index_oauth_token_secrets_on_namespace_and_foreign_id", unique: true
+  end
+
+  create_table "principal_roles", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "principal_id", null: false
+    t.bigint "role_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["principal_id", "role_id"], name: "index_principal_roles_on_principal_id_and_role_id", unique: true
+    t.index ["principal_id"], name: "index_principal_roles_on_principal_id"
+    t.index ["role_id"], name: "index_principal_roles_on_role_id"
   end
 
   create_table "principals", force: :cascade do |t|
@@ -116,6 +128,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_01_174025) do
     t.index ["oauth_token_secret_id"], name: "index_request_rules_on_oauth_token_secret_id"
     t.index ["position"], name: "index_request_rules_on_position"
     t.index ["static_secret_id"], name: "index_request_rules_on_static_secret_id"
+  end
+
+  create_table "roles", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id", null: false
+    t.string "foreign_id"
+    t.jsonb "labels", default: {}, null: false
+    t.string "name"
+    t.string "namespace", default: "default", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_roles_on_created_by_id"
+    t.index ["labels"], name: "index_roles_on_labels", using: :gin
+    t.index ["namespace", "foreign_id"], name: "index_roles_on_namespace_and_foreign_id", unique: true
   end
 
   create_table "secret_sources", force: :cascade do |t|
@@ -165,14 +190,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_01_174025) do
   add_foreign_key "grants", "gcp_auth_secrets"
   add_foreign_key "grants", "oauth_token_secrets"
   add_foreign_key "grants", "principals"
+  add_foreign_key "grants", "roles"
   add_foreign_key "grants", "static_secrets"
   add_foreign_key "grants", "users", column: "created_by_id"
   add_foreign_key "oauth_token_secrets", "users", column: "created_by_id"
+  add_foreign_key "principal_roles", "principals"
+  add_foreign_key "principal_roles", "roles"
   add_foreign_key "principals", "users", column: "created_by_id"
   add_foreign_key "proxies", "principals"
   add_foreign_key "request_rules", "gcp_auth_secrets"
   add_foreign_key "request_rules", "oauth_token_secrets"
   add_foreign_key "request_rules", "static_secrets"
+  add_foreign_key "roles", "users", column: "created_by_id"
   add_foreign_key "secret_sources", "gcp_auth_secrets"
   add_foreign_key "secret_sources", "oauth_token_secrets"
   add_foreign_key "secret_sources", "static_secrets"
