@@ -40,6 +40,12 @@ class RoleTest < ActiveSupport::TestCase
     assert Role.new(valid_attrs(foreign_id: nil)).valid?
   end
 
+  test "rejects a foreign_id that starts with the opaque id prefix" do
+    role = Role.new(valid_attrs(foreign_id: "role_abc123"))
+    assert_not role.valid?
+    assert_includes role.errors[:foreign_id], "must not start with \"role_\", which is reserved for opaque ids"
+  end
+
   test "namespace and foreign_id are immutable after creation" do
     role = roles(:acme_infra)
     assert_raises(ActiveRecord::ReadonlyAttributeError) { role.update!(namespace: "globex") }

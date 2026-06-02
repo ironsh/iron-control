@@ -19,20 +19,24 @@ module Api
       end
 
       def create
-        attrs = data_params.permit(:namespace, :foreign_id, :name, labels: {})
-        attrs[:namespace] = "default" if attrs[:namespace].blank?
-        role = Role.new(attrs)
-        role.created_by = current_user
+        role = Role.new(namespace: upsert_namespace, foreign_id: data_params[:foreign_id],
+                        created_by: current_user)
+        role.assign_attributes(data_params.permit(:name, labels: {}))
         role.save!
         render status: :created, json: { data: record_payload(role) }
       rescue ActiveRecord::RecordInvalid => e
         render_validation_error(e.record)
       end
 
+      # PUT/PATCH upserts: an opaque id updates that record, any other identifier
+      # is a foreign_id that is created when absent. namespace and foreign_id are
+      # immutable, so they only take effect when the record is created.
       def update
-        role = Role.find_by_oid!(params[:id])
-        role.update!(data_params.permit(:name, labels: {}))
-        render json: { data: record_payload(role) }
+        role = resolve_for_upsert(Role)
+        was_new = role.new_record?
+        role.assign_attributes(data_params.permit(:name, labels: {}))
+        role.save!
+        render status: (was_new ? :created : :ok), json: { data: record_payload(role) }
       rescue ActiveRecord::RecordInvalid => e
         render_validation_error(e.record)
       end

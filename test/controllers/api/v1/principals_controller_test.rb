@@ -152,6 +152,29 @@ module Api
         assert_response :not_found
       end
 
+      test "PUT upserts a new principal by foreign_id" do
+        body = { data: { namespace: "acme", name: "Upserted" } }
+        assert_difference -> { Principal.count } => 1 do
+          put api_v1_principal_url(id: "U-upsert"), params: body.to_json, headers: auth_headers
+        end
+        assert_response :created
+
+        data = json_body.fetch("data")
+        assert_equal "acme", data["namespace"]
+        assert_equal "U-upsert", data["foreign_id"]
+        assert_equal "Upserted", data["name"]
+      end
+
+      test "PUT by foreign_id updates an existing principal without creating" do
+        principal = principals(:acme_channel)
+        body = { data: { namespace: "acme", name: "Renamed channel" } }
+        assert_no_difference -> { Principal.count } do
+          put api_v1_principal_url(id: principal.foreign_id), params: body.to_json, headers: auth_headers
+        end
+        assert_response :ok
+        assert_equal "Renamed channel", principal.reload.name
+      end
+
       test "GET index rejects requests without an Authorization header" do
         get api_v1_principals_url, params: { namespace: "acme" }
         assert_response :unauthorized

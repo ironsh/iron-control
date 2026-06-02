@@ -1,6 +1,8 @@
 class Principal < ApplicationRecord
   oid_prefix "prn"
 
+  include ForeignIdCollisionGuard
+
   attr_readonly :namespace, :foreign_id
 
   has_many :grants, dependent: :destroy

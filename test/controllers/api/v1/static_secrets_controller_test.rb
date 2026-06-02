@@ -149,6 +149,56 @@ module Api
         assert_response :unprocessable_content
       end
 
+      test "POST rejects a foreign_id that starts with the opaque id prefix" do
+        body = { data: { namespace: "acme", foreign_id: "ssr_collide", name: "x",
+                         inject_config: { "header" => "X" } } }
+        assert_no_difference -> { StaticSecret.count } do
+          post api_v1_static_secrets_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :unprocessable_content
+      end
+
+      test "PUT upserts a new secret by foreign_id" do
+        body = {
+          data: {
+            namespace: "acme",
+            name: "upserted",
+            inject_config: { "header" => "Authorization" },
+            source: { source_type: "env", config: { "var" => "UP" } },
+            rules: [ { host: "up.example.com", http_methods: [ "GET" ], paths: [ "/" ] } ]
+          }
+        }
+
+        assert_difference -> { StaticSecret.count } => 1 do
+          put api_v1_static_secret_url(id: "upserted-ref"), params: body.to_json, headers: auth_headers
+        end
+        assert_response :created
+
+        data = json_body.fetch("data")
+        assert_equal "upserted-ref", data["foreign_id"]
+        assert_equal "acme", data["namespace"]
+        assert_equal "upserted", data["name"]
+      end
+
+      test "PUT by foreign_id updates an existing secret without creating" do
+        ref = static_secrets(:acme_prod_api_key)
+        body = {
+          data: {
+            namespace: ref.namespace,
+            name: "renamed-by-upsert",
+            inject_config: { "header" => "Authorization" },
+            source: { source_type: "env", config: { "var" => "X" } },
+            rules: [ { host: "x.example.com", http_methods: [ "GET" ], paths: [ "/" ] } ]
+          }
+        }
+
+        assert_no_difference -> { StaticSecret.count } do
+          put api_v1_static_secret_url(id: ref.foreign_id), params: body.to_json, headers: auth_headers
+        end
+        assert_response :ok
+        assert_equal "renamed-by-upsert", ref.reload.name
+      end
+
       test "POST returns 400 when the data key is missing" do
         post api_v1_static_secrets_url, params: { namespace: "acme" }.to_json, headers: auth_headers
         assert_response :bad_request
