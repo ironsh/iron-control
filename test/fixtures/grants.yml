@@ -14,3 +14,9 @@ acme_infra_prod_api_key:
   role: acme_infra
   static_secret: acme_prod_api_key
   created_by: acme_admin
+
+# A Postgres upstream granted to the proxy's principal.
+acme_channel_analytics_pg:
+  principal: acme_channel
+  pg_dsn_secret: acme_analytics_pg
+  created_by: acme_admin

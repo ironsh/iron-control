@@ -9,7 +9,9 @@ module Api
     #
     # `secrets` populates the proxy's `secrets` transform. `transforms` carries
     # whole transforms the proxy splices into its pipeline: a gcp_auth transform
-    # per granted GcpAuthSecret and one bundled oauth_token transform.
+    # per granted GcpAuthSecret and one bundled oauth_token transform. `postgres`
+    # carries one upstream-DSN entry per granted PgDsnSecret, keyed by foreign_id;
+    # the proxy's locally-defined listeners bind to these by foreign_id.
     #
     # The top-level `rules`, `mcp`, and `ingest_token` fields the proxy also
     # understands are intentionally omitted: iron-control has no models for them
@@ -28,7 +30,8 @@ module Api
             status: current_proxy.status,
             principal_id: current_proxy.principal&.oid,
             secrets: current_proxy.sync_secrets,
-            transforms: current_proxy.sync_transforms
+            transforms: current_proxy.sync_transforms,
+            postgres: current_proxy.sync_postgres
           }
         end
       end

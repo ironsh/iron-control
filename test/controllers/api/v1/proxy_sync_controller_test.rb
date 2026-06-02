@@ -140,6 +140,20 @@ class ProxySyncControllerTest < ActionDispatch::IntegrationTest
     assert_equal [], json_body.fetch("transforms")
   end
 
+  test "postgres carries a DSN entry per granted PgDsnSecret, keyed by foreign_id" do
+    # acme_channel is granted acme_analytics_pg (see grants.yml).
+    post api_v1_proxy_sync_url, params: {}.to_json, headers: auth_headers
+    assert_response :ok
+
+    postgres = json_body.fetch("postgres")
+    entry = postgres.find { |e| e["foreign_id"] == pg_dsn_secrets(:acme_analytics_pg).foreign_id }
+    refute_nil entry
+    assert_equal pg_dsn_secrets(:acme_analytics_pg).oid, entry["id"]
+    assert_equal "PG_ANALYTICS_DSN", entry.dig("dsn", "var")
+    assert_equal "env", entry.dig("dsn", "type")
+    assert_equal "readonly", entry["role"]
+  end
+
   test "an unassigned proxy syncs an empty config with unassigned status" do
     unassigned_token = "iprx_#{'c' * 64}"
     post api_v1_proxy_sync_url, params: {}.to_json, headers: auth_headers(unassigned_token)
