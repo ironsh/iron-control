@@ -51,15 +51,17 @@ module Api
         assert_response :unprocessable_content
       end
 
-      test "POST returns 422 when the role is already assigned" do
+      test "POST is idempotent when the role is already assigned" do
         principal = principals(:acme_channel)
-        body = { data: { role_id: roles(:acme_infra).oid } }
+        role = roles(:acme_infra)
+        body = { data: { role_id: role.oid } }
 
         assert_no_difference -> { principal.principal_roles.count } do
           post api_v1_principal_roles_url(principal_id: principal.oid),
                params: body.to_json, headers: auth_headers
         end
-        assert_response :unprocessable_content
+        assert_response :ok
+        assert_equal role.oid, json_body.dig("data", "id")
       end
 
       test "POST returns 404 for an unknown role" do
