@@ -68,6 +68,67 @@ class ProxiesControllerTest < ActionDispatch::IntegrationTest
     assert_response :not_found
   end
 
+  test "POST without a principal creates an unassigned proxy" do
+    body = { data: { name: "boots-unassigned" } }
+    post api_v1_proxies_url, params: body.to_json, headers: auth_headers
+    assert_response :created
+
+    data = json_body.fetch("data")
+    assert_nil data["principal_id"]
+    assert_equal "unassigned", data["status"]
+    assert_nil data["principal_assigned_at"]
+    assert_match Proxy::TOKEN_FORMAT, data.fetch("token")
+  end
+
+  test "PATCH assigns a principal to an unassigned proxy" do
+    proxy = proxies(:unassigned_proxy)
+    body = { data: { principal_id: principals(:acme_channel).oid } }
+    patch api_v1_proxy_url(id: proxy.oid), params: body.to_json, headers: auth_headers
+    assert_response :ok
+
+    data = json_body.fetch("data")
+    assert_equal principals(:acme_channel).oid, data["principal_id"]
+    assert_equal "assigned", data["status"]
+    refute_nil data["principal_assigned_at"]
+  end
+
+  test "PATCH swaps the principal of an assigned proxy" do
+    proxy = proxies(:acme_proxy)
+    body = { data: { principal_id: principals(:globex_user).oid } }
+    patch api_v1_proxy_url(id: proxy.oid), params: body.to_json, headers: auth_headers
+    assert_response :ok
+    assert_equal principals(:globex_user).oid, json_body.dig("data", "principal_id")
+    assert_equal principals(:globex_user), proxy.reload.principal
+  end
+
+  test "PATCH with a null principal_id unassigns the proxy" do
+    proxy = proxies(:acme_proxy)
+    body = { data: { principal_id: nil } }
+    patch api_v1_proxy_url(id: proxy.oid), params: body.to_json, headers: auth_headers
+    assert_response :ok
+
+    data = json_body.fetch("data")
+    assert_nil data["principal_id"]
+    assert_equal "unassigned", data["status"]
+    assert_nil proxy.reload.principal
+  end
+
+  test "PATCH with an unknown principal returns not found" do
+    proxy = proxies(:unassigned_proxy)
+    body = { data: { principal_id: "prn_doesnotexist" } }
+    patch api_v1_proxy_url(id: proxy.oid), params: body.to_json, headers: auth_headers
+    assert_response :not_found
+  end
+
+  test "GET show reports an unassigned proxy" do
+    proxy = proxies(:unassigned_proxy)
+    get api_v1_proxy_url(id: proxy.oid), headers: auth_headers
+    assert_response :ok
+    data = json_body.fetch("data")
+    assert_nil data["principal_id"]
+    assert_equal "unassigned", data["status"]
+  end
+
   test "DELETE removes a proxy" do
     proxy = proxies(:globex_proxy)
     assert_difference -> { Proxy.count }, -1 do

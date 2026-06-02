@@ -6,7 +6,9 @@ class Principal < ApplicationRecord
   attr_readonly :namespace, :foreign_id
 
   has_many :grants, dependent: :destroy
-  has_many :proxies, dependent: :destroy
+  # Proxies outlive their principal: deleting a principal unassigns its proxies
+  # rather than destroying them, leaving them ready for reassignment.
+  has_many :proxies, dependent: :nullify
   has_many :principal_roles, dependent: :destroy
   has_many :roles, through: :principal_roles
   belongs_to :created_by, class_name: "User"

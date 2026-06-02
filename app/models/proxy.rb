@@ -4,16 +4,29 @@ class Proxy < ApplicationRecord
   TOKEN_PREFIX = "iprx_".freeze
   TOKEN_FORMAT = /\Aiprx_[0-9a-f]{64}\z/
 
-  attr_readonly :principal_id, :bearer_token_hash
+  attr_readonly :bearer_token_hash
   attr_accessor :token
 
-  belongs_to :principal
+  # Optional: a proxy may boot unassigned and have a principal assigned or
+  # swapped later. principal_id is mutable so the assignment can change.
+  belongs_to :principal, optional: true
 
   validates :name, presence: true
   validates :bearer_token_hash, presence: true, uniqueness: true
   validate :token_matches_format, on: :create
 
   before_validation :issue_token, on: :create
+  before_save :stamp_principal_assignment, if: :will_save_change_to_principal_id?
+
+  # Whether the proxy currently carries a principal (and therefore any authority).
+  def assigned?
+    principal_id.present?
+  end
+
+  # "assigned" or "unassigned"; surfaced to operators and to the proxy on sync.
+  def status
+    assigned? ? "assigned" : "unassigned"
+  end
 
   def self.find_by_token(plaintext)
     return nil if plaintext.blank?
@@ -27,6 +40,7 @@ class Proxy < ApplicationRecord
   # Static secrets this proxy may receive, via its principal's effective grants
   # (direct grants plus grants from every assigned role).
   def granted_static_secrets
+    return StaticSecret.none unless principal
     StaticSecret
       .where(id: principal.effective_grants.select(:static_secret_id))
       .includes(:source, :rules)
@@ -35,6 +49,7 @@ class Proxy < ApplicationRecord
 
   # gcp_auth credentials this proxy may receive, via its principal's effective grants.
   def granted_gcp_auth_secrets
+    return GcpAuthSecret.none unless principal
     GcpAuthSecret
       .where(id: principal.effective_grants.select(:gcp_auth_secret_id))
       .includes(:keyfile_source, :rules)
@@ -43,6 +58,7 @@ class Proxy < ApplicationRecord
 
   # oauth_token credentials this proxy may receive, via its principal's effective grants.
   def granted_oauth_token_secrets
+    return OauthTokenSecret.none unless principal
     OauthTokenSecret
       .where(id: principal.effective_grants.select(:oauth_token_secret_id))
       .includes(:sources, :rules)
@@ -75,7 +91,15 @@ class Proxy < ApplicationRecord
   # this as an ETag: it echoes its current hash on each sync and only re-applies
   # config when the hash changes.
   def config_hash
-    payload = { "secrets" => sync_secrets, "transforms" => sync_transforms }
+    payload = {
+      # The principal identity and assignment time are folded in so that any
+      # assignment change forces a refresh, even a swap between principals whose
+      # effective secrets happen to be identical (or an unassign to empty).
+      "principal" => principal&.oid,
+      "principal_assigned_at" => principal_assigned_at&.utc&.iso8601,
+      "secrets" => sync_secrets,
+      "transforms" => sync_transforms
+    }
     "sha256:#{Digest::SHA256.hexdigest(self.class.canonical_json(payload))}"
   end
 
@@ -97,6 +121,12 @@ class Proxy < ApplicationRecord
   end
 
   private
+
+  # Stamp (or clear) the assignment time whenever principal_id changes, so the
+  # column always reflects the current assignment.
+  def stamp_principal_assignment
+    self.principal_assigned_at = principal_id ? Time.current : nil
+  end
 
   def issue_token
     return if bearer_token_hash.present?

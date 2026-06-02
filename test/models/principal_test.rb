@@ -94,4 +94,18 @@ class PrincipalTest < ActiveSupport::TestCase
     assert_not principal.valid?
     assert_includes principal.errors[:created_by], "must exist"
   end
+
+  test "destroying a principal unassigns its proxies rather than destroying them" do
+    principal = principals(:acme_channel)
+    proxy = proxies(:acme_proxy)
+    assert_equal principal, proxy.principal
+
+    assert_no_difference -> { Proxy.count } do
+      principal.destroy!
+    end
+
+    proxy.reload
+    assert_nil proxy.principal
+    assert_equal "unassigned", proxy.status
+  end
 end
