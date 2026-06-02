@@ -10,11 +10,18 @@ module Api
         render json: { data: principal.roles.order(:id).map { |r| role_payload(r) } }
       end
 
+      # Idempotent: re-assigning a role the principal already holds returns the
+      # existing assignment with 200 rather than a uniqueness 422.
       def create
         principal = Principal.find_by_oid!(params[:principal_id])
         role = Role.find_by_oid!(data_params.require(:role_id))
-        principal.principal_roles.create!(role: role)
-        render status: :created, json: { data: role_payload(role) }
+        existing = principal.principal_roles.find_by(role: role)
+        if existing
+          render status: :ok, json: { data: role_payload(role) }
+        else
+          principal.principal_roles.create!(role: role)
+          render status: :created, json: { data: role_payload(role) }
+        end
       rescue ActiveRecord::RecordInvalid => e
         render_validation_error(e.record)
       end
