@@ -109,4 +109,34 @@ class ProxyTest < ActiveSupport::TestCase
                   created_by: users(:globex_admin))
     refute_equal before, proxy.config_hash
   end
+
+  # --- role-based grants --------------------------------------------------
+
+  test "granted_static_secrets includes secrets granted via an assigned role" do
+    # acme_channel holds the acme_infra role, which is granted acme_prod_api_key.
+    proxy = proxies(:acme_proxy)
+    assert_includes proxy.granted_static_secrets, static_secrets(:acme_prod_api_key)
+  end
+
+  test "effective grants dedupe a secret reachable both directly and via a role" do
+    principal = principals(:acme_channel)
+    proxy = proxies(:acme_proxy)
+    # acme_prod_api_key already reaches the principal through the acme_infra role;
+    # also grant it directly and confirm it still appears exactly once.
+    Grant.create!(principal: principal, static_secret: static_secrets(:acme_prod_api_key),
+                  created_by: users(:acme_admin))
+    ids = proxy.granted_static_secrets.map(&:id)
+    assert_equal ids.uniq, ids
+    assert_equal 1, ids.count(static_secrets(:acme_prod_api_key).id)
+  end
+
+  test "config_hash changes when a role grant becomes reachable" do
+    role = Role.create!(namespace: "acme", foreign_id: "extra", created_by: users(:acme_admin))
+    proxy = proxies(:acme_proxy)
+    before = proxy.config_hash
+    Grant.create!(role: role, gcp_auth_secret: gcp_auth_secrets(:acme_bigquery),
+                  created_by: users(:acme_admin))
+    principals(:acme_channel).principal_roles.create!(role: role)
+    refute_equal before, proxy.reload.config_hash
+  end
 end

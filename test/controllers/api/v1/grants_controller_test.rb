@@ -94,6 +94,50 @@ module Api
         assert_equal secret.oid, json_body.dig("data", "oauth_token_secret_id")
       end
 
+      test "POST creates a Grant for a role grantee" do
+        role = roles(:acme_admin_role)
+        secret_ref = static_secrets(:github_token_inject)
+        body = { data: { role_id: role.oid, static_secret_id: secret_ref.oid } }
+
+        assert_difference -> { Grant.count } => 1 do
+          post api_v1_grants_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :created
+
+        data = json_body.fetch("data")
+        assert_equal role.oid, data["role_id"]
+        assert_nil data["principal_id"]
+        assert_equal secret_ref.oid, data["static_secret_id"]
+      end
+
+      test "GET returns a role-granted Grant with its role_id" do
+        grant = grants(:acme_infra_prod_api_key)
+        get api_v1_grant_url(id: grant.oid), headers: auth_headers
+        assert_response :ok
+
+        data = json_body.fetch("data")
+        assert_equal grant.role.oid, data["role_id"]
+        assert_nil data["principal_id"]
+      end
+
+      test "POST returns 422 when no grantee id is supplied" do
+        body = { data: { static_secret_id: static_secrets(:github_token_inject).oid } }
+
+        assert_no_difference -> { Grant.count } do
+          post api_v1_grants_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :unprocessable_entity
+      end
+
+      test "POST returns 404 when role_id is unknown" do
+        body = { data: { role_id: "role_nope", static_secret_id: static_secrets(:github_token_inject).oid } }
+
+        assert_no_difference -> { Grant.count } do
+          post api_v1_grants_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :not_found
+      end
+
       test "POST returns 422 when no grantable id is supplied" do
         principal = principals(:globex_user)
         body = { data: { principal_id: principal.oid } }

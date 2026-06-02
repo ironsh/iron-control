@@ -12,6 +12,7 @@
 - [GCP auth secrets](#gcp-auth-secrets)
 - [OAuth token secrets](#oauth-token-secrets)
 - [Principals](#principals)
+- [Roles](#roles)
 - [Grants](#grants)
 - [API keys](#api-keys)
 - [Proxies](#proxies)
@@ -50,7 +51,7 @@ A missing or invalid token returns `401`:
 
 - **Pagination** uses the `page` (default `1`) and `limit` (default `50`, max `200`) query parameters. Values are clamped into range; a non-integer value returns `400`.
 - **Namespaced list filtering** (static secrets, GCP auth secrets, OAuth token secrets, principals) requires a `namespace` query parameter and accepts an optional `labels[key]=value` filter that matches by JSONB containment (all supplied pairs must be present). Label values must be scalars.
-- **Object IDs** are prefixed by type: `ssr_` (static secret), `gas_` (GCP auth secret), `ots_` (OAuth token secret), `prn_` (principal), `grant_` (grant), `ak_` (API key), `prx_` (proxy).
+- **Object IDs** are prefixed by type: `ssr_` (static secret), `gas_` (GCP auth secret), `ots_` (OAuth token secret), `prn_` (principal), `role_` (role), `grant_` (grant), `ak_` (API key), `prx_` (proxy).
 - **`namespace`** defaults to `"default"` when omitted on create. Once set, `namespace` and `foreign_id` are immutable.
 - **`namespace` and `foreign_id`** must be URL-safe: only `A-Z a-z 0-9 - . _ ~`. `foreign_id` is optional and, when set, must be unique within its namespace.
 - **`labels`** is an arbitrary string-keyed object (defaults to `{}`).
@@ -466,19 +467,92 @@ Returns `201`:
 | `GET`  | `/api/v1/principals/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
 | `PUT`  | `/api/v1/principals/:id` | Update. Only `name` and `labels` are mutable; `namespace` and `foreign_id` are immutable and ignored. |
 
+See [Role assignments](#role-assignments) for attaching roles to a principal.
+
+## Roles
+
+A role is a reusable bundle of [grants](#grants). Principals are assigned roles, and a principal's effective secrets are the union of its own direct grants and the grants of every role it holds. Use a role to apply a common set of secrets (for example, shared infrastructure credentials) to many principals without re-granting each one.
+
+Roles are namespaced. A principal may only be assigned roles in its own namespace.
+
+### Attributes
+
+| Field        | In requests | Notes |
+| ------------ | ----------- | ----- |
+| `namespace`  | optional    | Defaults to `"default"`. Immutable. |
+| `foreign_id` | optional    | Unique per namespace. Immutable. Handy for idempotent provisioning. |
+| `name`       | optional    | |
+| `labels`     | optional    | |
+
+### Operations
+
+`POST /api/v1/roles`
+
+```json
+{ "data": { "namespace": "default", "foreign_id": "infra", "name": "Infra", "labels": { "kind": "shared" } } }
+```
+
+Returns `201`:
+
+```json
+{
+  "data": {
+    "id": "role_...",
+    "namespace": "default",
+    "foreign_id": "infra",
+    "name": "Infra",
+    "labels": { "kind": "shared" },
+    "created_at": "2026-06-01T10:00:00Z",
+    "updated_at": "2026-06-01T10:00:00Z"
+  }
+}
+```
+
+| Method   | Path | Notes |
+| -------- | ---- | ----- |
+| `GET`    | `/api/v1/roles?namespace=default` | List. `namespace` required; `labels[k]=v` and pagination optional. |
+| `GET`    | `/api/v1/roles/:id` | Fetch one. |
+| `GET`    | `/api/v1/roles/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
+| `PUT`    | `/api/v1/roles/:id` | Update. Only `name` and `labels` are mutable. |
+| `DELETE` | `/api/v1/roles/:id` | Delete. Returns `204`. Cascades: the role's grants and its assignments are removed. |
+
+### Role assignments
+
+Assign and unassign roles on a principal. The assignment endpoints are nested under the principal; the role is identified by its OID.
+
+`POST /api/v1/principals/:principal_id/roles`
+
+```json
+{ "data": { "role_id": "role_..." } }
+```
+
+Returns `201` with the assigned role's representation. Assigning a role from a different namespace, or one already assigned, returns `422`. An unknown principal or role returns `404`.
+
+| Method   | Path | Notes |
+| -------- | ---- | ----- |
+| `GET`    | `/api/v1/principals/:principal_id/roles` | List the roles assigned to the principal. |
+| `POST`   | `/api/v1/principals/:principal_id/roles` | Assign a role (`data: { role_id }`). |
+| `DELETE` | `/api/v1/principals/:principal_id/roles/:id` | Unassign the role with OID `:id`. Returns `204`; `404` if not assigned. |
+
 ## Grants
 
-A grant attaches exactly one secret to a principal. The principal's proxies then receive that secret through [proxy sync](#proxy-sync).
+A grant attaches exactly one secret to a **grantee** — either a principal or a [role](#roles). A principal receives a secret if it is granted directly or through any role the principal holds; its proxies then receive that secret through [proxy sync](#proxy-sync).
 
 ### Create
 
-`POST /api/v1/grants` — supply `principal_id` plus exactly one of `static_secret_id`, `gcp_auth_secret_id`, or `oauth_token_secret_id`:
+`POST /api/v1/grants` — supply exactly one grantee (`principal_id` **or** `role_id`) plus exactly one of `static_secret_id`, `gcp_auth_secret_id`, or `oauth_token_secret_id`:
 
 ```json
 { "data": { "principal_id": "prn_...", "static_secret_id": "ssr_..." } }
 ```
 
-Returns `201`. The response includes only the one secret-type key that was set:
+Or grant to a role:
+
+```json
+{ "data": { "role_id": "role_...", "static_secret_id": "ssr_..." } }
+```
+
+Returns `201`. The response includes the one grantee key and the one secret-type key that were set:
 
 ```json
 {
@@ -492,13 +566,13 @@ Returns `201`. The response includes only the one secret-type key that was set:
 }
 ```
 
-Referencing a missing principal or secret returns `404`. Supplying zero secret-type keys returns `422` with `"must reference one of static_secret_id, gcp_auth_secret_id, oauth_token_secret_id"`.
+Referencing a missing grantee or secret returns `404`. Supplying no grantee returns `422` with `"must reference one of principal_id, role_id"`; supplying no secret returns `422` with `"must reference one of static_secret_id, gcp_auth_secret_id, oauth_token_secret_id"`.
 
 ### Other operations
 
 | Method   | Path | Notes |
 | -------- | ---- | ----- |
-| `GET`    | `/api/v1/grants/:id` | Fetch one. |
+| `GET`    | `/api/v1/grants/:id` | Fetch one. Response carries `principal_id` or `role_id` depending on the grantee. |
 | `DELETE` | `/api/v1/grants/:id` | Revoke. Returns `204`. |
 
 ## API keys
@@ -646,6 +720,7 @@ Response when the hash differs (full payload):
 
 Notes on the proxy-sync payload, which differs from the REST representation:
 
+- The delivered config covers the proxy's principal's **effective grants**: secrets granted to the principal directly plus those granted to any [role](#roles) it holds. A secret reachable through more than one path appears once.
 - `secrets` carries one entry per granted static secret that has a source (sourceless static secrets are skipped). `transforms` carries one `gcp_auth` transform per granted GCP auth secret and a single bundled `oauth_token` transform whose `config.tokens` lists every granted OAuth token secret.
 - Each source is flattened: its `config` keys are merged up and tagged with `type` (the `source_type`). A `control_plane` source delivers its decrypted value inline as `value`.
 - Rules use `methods` here, versus `http_methods` in the REST API. Blank rule fields are omitted.

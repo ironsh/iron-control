@@ -6,6 +6,11 @@ module Api
         render json: serialize(grant)
       end
 
+      GRANTEE_TYPES = {
+        principal_id: Principal,
+        role_id: Role
+      }.freeze
+
       GRANTABLE_TYPES = {
         static_secret_id: StaticSecret,
         gcp_auth_secret_id: GcpAuthSecret,
@@ -13,22 +18,17 @@ module Api
       }.freeze
 
       def create
-        attrs = data_params.permit(:principal_id, *GRANTABLE_TYPES.keys)
-        principal = Principal.find_by_oid!(attrs[:principal_id])
+        attrs = data_params.permit(*GRANTEE_TYPES.keys, *GRANTABLE_TYPES.keys)
 
-        grantable_key = GRANTABLE_TYPES.keys.find { |k| attrs[k].present? }
-        unless grantable_key
-          return render status: :unprocessable_entity, json: {
-            error: { message: "validation failed",
-                     details: { base: [ "must reference one of #{GRANTABLE_TYPES.keys.join(", ")}" ] } }
-          }
-        end
-        grantable = GRANTABLE_TYPES.fetch(grantable_key).find_by_oid!(attrs[grantable_key])
-        association = grantable_key.to_s.delete_suffix("_id").to_sym
+        grantee_key, grantee = resolve_one(attrs, GRANTEE_TYPES)
+        return render_missing(GRANTEE_TYPES) unless grantee_key
+
+        grantable_key, grantable = resolve_one(attrs, GRANTABLE_TYPES)
+        return render_missing(GRANTABLE_TYPES) unless grantable_key
 
         grant = Grant.create!(
-          principal: principal,
-          association => grantable,
+          assoc(grantee_key) => grantee,
+          assoc(grantable_key) => grantable,
           created_by: current_user
         )
         render status: :created, json: serialize(grant)
@@ -44,14 +44,34 @@ module Api
 
       private
 
+      # Picks the single present key from a {param_key => Model} map and loads the
+      # referenced record (404 if it does not exist). Returns nil when no key is
+      # present; the caller turns that into a validation error.
+      def resolve_one(attrs, types)
+        key = types.keys.find { |k| attrs[k].present? }
+        return nil unless key
+        [ key, types.fetch(key).find_by_oid!(attrs[key]) ]
+      end
+
+      def assoc(param_key)
+        param_key.to_s.delete_suffix("_id").to_sym
+      end
+
+      def render_missing(types)
+        render status: :unprocessable_entity, json: {
+          error: { message: "validation failed",
+                   details: { base: [ "must reference one of #{types.keys.join(", ")}" ] } }
+        }
+      end
+
       def serialize(grant)
+        grantee = grant.grantee
         grantable = grant.grantable
-        key = GRANTABLE_TYPES.key(grantable.class)
         {
           data: {
             id: grant.oid,
-            principal_id: grant.principal.oid,
-            key => grantable.oid,
+            GRANTEE_TYPES.key(grantee.class) => grantee.oid,
+            GRANTABLE_TYPES.key(grantable.class) => grantable.oid,
             created_at: grant.created_at,
             updated_at: grant.updated_at
           }

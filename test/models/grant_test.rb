@@ -14,10 +14,21 @@ class GrantTest < ActiveSupport::TestCase
     assert grant.valid?
   end
 
-  test "requires principal" do
+  test "is valid with a role grantee instead of a principal" do
+    grant = Grant.new(valid_attrs(principal: nil, role: roles(:acme_admin_role)))
+    assert grant.valid?
+  end
+
+  test "requires exactly one grantee" do
     grant = Grant.new(valid_attrs(principal: nil))
     assert_not grant.valid?
-    assert_includes grant.errors[:principal], "must exist"
+    assert_includes grant.errors[:base], "must reference exactly one of principal, role"
+  end
+
+  test "rejects both a principal and a role" do
+    grant = Grant.new(valid_attrs(role: roles(:acme_infra)))
+    assert_not grant.valid?
+    assert_includes grant.errors[:base], "must reference exactly one of principal, role"
   end
 
   test "requires exactly one grantable" do
@@ -61,6 +72,19 @@ class GrantTest < ActiveSupport::TestCase
     assert_not_empty grant_ids
     ref.destroy!
     assert_equal 0, Grant.where(id: grant_ids).count
+  end
+
+  test "destroyed when its role is destroyed" do
+    role = roles(:acme_infra)
+    grant_ids = role.grants.pluck(:id)
+    assert_not_empty grant_ids
+    role.destroy!
+    assert_equal 0, Grant.where(id: grant_ids).count
+  end
+
+  test "grantee returns the principal or role" do
+    assert_equal principals(:acme_channel), grants(:acme_channel_github_token).grantee
+    assert_equal roles(:acme_infra), grants(:acme_infra_prod_api_key).grantee
   end
 
   test "declares grant as its oid prefix" do

@@ -17,10 +17,17 @@ Rails.application.routes.draw do
       resources :static_secrets, only: %i[index show create update]
       resources :gcp_auth_secrets, only: %i[index show create update]
       resources :oauth_token_secrets, only: %i[index show create update]
+      resources :roles, only: %i[index show create update destroy] do
+        collection do
+          get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup
+        end
+      end
       resources :principals, only: %i[index show create update] do
         collection do
           get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup
         end
+        # Role assignments for a principal. :id is the role's oid.
+        resources :roles, only: %i[index create destroy], controller: :principal_roles
       end
       resources :grants, only: %i[show create destroy]
       resources :api_keys, only: %i[index show create destroy]

@@ -7,3 +7,10 @@ acme_channel_db_password:
   principal: acme_channel
   static_secret: db_password_replace
   created_by: acme_admin
+
+# Granted to a role rather than a principal: every principal holding acme_infra
+# resolves this secret through the role.
+acme_infra_prod_api_key:
+  role: acme_infra
+  static_secret: acme_prod_api_key
+  created_by: acme_admin

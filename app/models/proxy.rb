@@ -24,26 +24,27 @@ class Proxy < ApplicationRecord
     Digest::SHA256.hexdigest(plaintext)
   end
 
-  # Static secrets this proxy may receive, via its principal's grants.
+  # Static secrets this proxy may receive, via its principal's effective grants
+  # (direct grants plus grants from every assigned role).
   def granted_static_secrets
     StaticSecret
-      .where(id: principal.grants.select(:static_secret_id))
+      .where(id: principal.effective_grants.select(:static_secret_id))
       .includes(:source, :rules)
       .order(:id)
   end
 
-  # gcp_auth credentials this proxy may receive, via its principal's grants.
+  # gcp_auth credentials this proxy may receive, via its principal's effective grants.
   def granted_gcp_auth_secrets
     GcpAuthSecret
-      .where(id: principal.grants.select(:gcp_auth_secret_id))
+      .where(id: principal.effective_grants.select(:gcp_auth_secret_id))
       .includes(:keyfile_source, :rules)
       .order(:id)
   end
 
-  # oauth_token credentials this proxy may receive, via its principal's grants.
+  # oauth_token credentials this proxy may receive, via its principal's effective grants.
   def granted_oauth_token_secrets
     OauthTokenSecret
-      .where(id: principal.grants.select(:oauth_token_secret_id))
+      .where(id: principal.effective_grants.select(:oauth_token_secret_id))
       .includes(:sources, :rules)
       .order(:id)
   end
