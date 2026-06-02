@@ -20,6 +20,12 @@ class PrincipalTest < ActiveSupport::TestCase
     assert Principal.new(default_attrs(name: "Just a label")).valid?
   end
 
+  test "rejects a foreign_id that starts with the opaque id prefix" do
+    principal = Principal.new(default_attrs(namespace: "acme", foreign_id: "prn_abc123"))
+    assert_not principal.valid?
+    assert_includes principal.errors[:foreign_id], "must not start with \"prn_\", which is reserved for opaque ids"
+  end
+
   test "is invalid when namespace is blank" do
     principal = Principal.new(default_attrs(namespace: "", foreign_id: "C-blank"))
     assert_not principal.valid?

@@ -122,6 +122,23 @@ module Api
         assert_equal 1, secret.rules.count
       end
 
+      test "PUT upserts a new gcp_auth secret by foreign_id" do
+        body = {
+          data: {
+            namespace: "acme",
+            credentials_provider: { type: "workload_identity" },
+            scopes: [ "scopeA" ],
+            rules: [ { host: "*.googleapis.com" } ]
+          }
+        }
+
+        assert_difference -> { GcpAuthSecret.count } => 1 do
+          put api_v1_gcp_auth_secret_url(id: "wif-upsert"), params: body.to_json, headers: auth_headers
+        end
+        assert_response :created
+        assert_equal "wif-upsert", json_body.dig("data", "foreign_id")
+      end
+
       test "GET index is scoped by namespace" do
         get api_v1_gcp_auth_secrets_url, params: { namespace: "acme" }, headers: auth_headers
         assert_response :ok

@@ -1,6 +1,8 @@
 class StaticSecret < ApplicationRecord
   oid_prefix "ssr"
 
+  include ForeignIdCollisionGuard
+
   has_many :grants, dependent: :destroy
 
   URL_SAFE_FORMAT = /\A[A-Za-z0-9\-._~]+\z/
