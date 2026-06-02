@@ -65,6 +65,15 @@ class Proxy < ApplicationRecord
       .order(:id)
   end
 
+  # Postgres upstreams this proxy may serve, via its principal's effective grants.
+  def granted_pg_dsn_secrets
+    return PgDsnSecret.none unless principal
+    PgDsnSecret
+      .where(id: principal.effective_grants.select(:pg_dsn_secret_id))
+      .includes(:dsn_source)
+      .order(:id)
+  end
+
   # The `secrets` array delivered to iron-proxy. Each entry maps to the proxy's
   # `secrets` transform `secretEntry` shape. Secrets without a source are skipped
   # because the proxy requires a source to resolve a value.
@@ -87,6 +96,17 @@ class Proxy < ApplicationRecord
     transforms
   end
 
+  # The top-level `postgres` array delivered to iron-proxy: one DSN entry per
+  # granted PgDsnSecret, keyed by foreign_id. The proxy's local listeners bind to
+  # these by foreign_id. Entries without a DSN source are skipped because the
+  # proxy can't dial an upstream without one.
+  def sync_postgres
+    granted_pg_dsn_secrets.filter_map do |pg|
+      next unless pg.dsn_source
+      pg.to_proxy_dsn
+    end
+  end
+
   # Opaque, deterministic fingerprint of the delivered config. The proxy treats
   # this as an ETag: it echoes its current hash on each sync and only re-applies
   # config when the hash changes.
@@ -98,7 +118,8 @@ class Proxy < ApplicationRecord
       "principal" => principal&.oid,
       "principal_assigned_at" => principal_assigned_at&.utc&.iso8601,
       "secrets" => sync_secrets,
-      "transforms" => sync_transforms
+      "transforms" => sync_transforms,
+      "postgres" => sync_postgres
     }
     "sha256:#{Digest::SHA256.hexdigest(self.class.canonical_json(payload))}"
   end

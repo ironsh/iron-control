@@ -15,6 +15,7 @@ class Iron::BootstrapTest < ActiveSupport::TestCase
     StaticSecret.delete_all
     GcpAuthSecret.delete_all
     OauthTokenSecret.delete_all
+    PgDsnSecret.delete_all
     Principal.delete_all
     Role.delete_all
     ApiKey.unscoped.delete_all

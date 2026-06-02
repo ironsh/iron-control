@@ -17,6 +17,7 @@ Rails.application.routes.draw do
       resources :static_secrets, only: %i[index show create update]
       resources :gcp_auth_secrets, only: %i[index show create update]
       resources :oauth_token_secrets, only: %i[index show create update]
+      resources :pg_dsn_secrets, only: %i[index show create update]
       resources :roles, only: %i[index show create update destroy] do
         collection do
           get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup

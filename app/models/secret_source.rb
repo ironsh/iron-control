@@ -17,10 +17,12 @@ class SecretSource < ApplicationRecord
 
   # A source belongs to exactly one owner. static_secret feeds the `secrets`
   # transform; gcp_auth_secret is a gcp_auth keyfile; oauth_token_secret holds
-  # one oauth_token entry's credential fields and token-endpoint headers.
+  # one oauth_token entry's credential fields and token-endpoint headers;
+  # pg_dsn_secret is a Postgres upstream's connection string.
   belongs_to :static_secret, optional: true
   belongs_to :gcp_auth_secret, optional: true
   belongs_to :oauth_token_secret, optional: true
+  belongs_to :pg_dsn_secret, optional: true
 
   # Only set for oauth_token_secret-owned sources: whether `role` names a
   # credential field (client_id, ...) or a token-endpoint header.
@@ -41,7 +43,7 @@ class SecretSource < ApplicationRecord
     source
   end
 
-  OWNER_ASSOCIATIONS = %i[static_secret gcp_auth_secret oauth_token_secret].freeze
+  OWNER_ASSOCIATIONS = %i[static_secret gcp_auth_secret oauth_token_secret pg_dsn_secret].freeze
 
   validates :source_type, presence: true, inclusion: { in: SOURCE_TYPES }
   validate :config_is_a_hash

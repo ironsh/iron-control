@@ -14,7 +14,8 @@ module Api
       GRANTABLE_TYPES = {
         static_secret_id: StaticSecret,
         gcp_auth_secret_id: GcpAuthSecret,
-        oauth_token_secret_id: OauthTokenSecret
+        oauth_token_secret_id: OauthTokenSecret,
+        pg_dsn_secret_id: PgDsnSecret
       }.freeze
 
       def create
