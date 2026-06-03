@@ -17,10 +17,20 @@ Rails.application.routes.draw do
 
   namespace :api do
     namespace :v1 do
-      resources :static_secrets, only: %i[index show create update]
-      resources :gcp_auth_secrets, only: %i[index show create update]
-      resources :oauth_token_secrets, only: %i[index show create update]
-      resources :pg_dsn_secrets, only: %i[index show create update]
+      # Each secret type is addressable by opaque oid (member routes) or by an
+      # explicit namespace + foreign_id via the namespaced lookup route.
+      resources :static_secrets, only: %i[index show create update] do
+        collection { get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup }
+      end
+      resources :gcp_auth_secrets, only: %i[index show create update] do
+        collection { get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup }
+      end
+      resources :oauth_token_secrets, only: %i[index show create update] do
+        collection { get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup }
+      end
+      resources :pg_dsn_secrets, only: %i[index show create update] do
+        collection { get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup }
+      end
       resources :roles, only: %i[index show create update destroy] do
         collection do
           get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup
@@ -31,6 +41,8 @@ Rails.application.routes.draw do
       resources :principals, only: %i[index show create update] do
         collection do
           get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup
+          get "lookup/:namespace/:foreign_id/effective_config",
+              action: :effective_config, as: :lookup_effective_config
         end
         member do
           get "effective_config"

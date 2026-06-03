@@ -11,6 +11,11 @@ module Api
         render json: { data: record_payload(ref) }
       end
 
+      # GET /api/v1/oauth_token_secrets/lookup/:namespace/:foreign_id
+      def lookup
+        render json: { data: record_payload(find_by_foreign_id!(OauthTokenSecret)) }
+      end
+
       def create
         ref = OauthTokenSecret.new(created_by: current_user)
         assign_and_save!(ref, data_params)

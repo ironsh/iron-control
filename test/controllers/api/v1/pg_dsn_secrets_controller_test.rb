@@ -32,6 +32,27 @@ module Api
         refute data.key?("client_user")
       end
 
+      test "GET lookup finds a pg_dsn secret by namespace and foreign_id" do
+        secret = pg_dsn_secrets(:acme_analytics_pg)
+        get lookup_api_v1_pg_dsn_secrets_url(namespace: secret.namespace, foreign_id: secret.foreign_id),
+            headers: auth_headers
+        assert_response :ok
+        assert_equal secret.oid, json_body.dig("data", "id")
+      end
+
+      test "GET lookup scopes a pg_dsn secret by namespace" do
+        secret = pg_dsn_secrets(:acme_analytics_pg)
+        get lookup_api_v1_pg_dsn_secrets_url(namespace: "globex", foreign_id: secret.foreign_id),
+            headers: auth_headers
+        assert_response :not_found
+      end
+
+      test "GET lookup returns 404 when no pg_dsn secret matches" do
+        get lookup_api_v1_pg_dsn_secrets_url(namespace: "acme", foreign_id: "does-not-exist"),
+            headers: auth_headers
+        assert_response :not_found
+      end
+
       test "POST creates a pg_dsn secret with a nested dsn source" do
         body = {
           data: {

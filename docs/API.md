@@ -11,6 +11,7 @@
 - [Static secrets](#static-secrets)
 - [GCP auth secrets](#gcp-auth-secrets)
 - [OAuth token secrets](#oauth-token-secrets)
+- [PG DSN secrets](#pg-dsn-secrets)
 - [Principals](#principals)
 - [Roles](#roles)
 - [Grants](#grants)
@@ -247,6 +248,7 @@ The `source` in responses never includes a `control_plane` `secret` value.
 | ------ | ---- | ----- |
 | `GET`  | `/api/v1/static_secrets?namespace=default` | List. `namespace` required; `labels[k]=v` and pagination optional. |
 | `GET`  | `/api/v1/static_secrets/:id` | Fetch one. `404` if missing. |
+| `GET`  | `/api/v1/static_secrets/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
 | `PUT`/`PATCH` | `/api/v1/static_secrets/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`; same body as create. `source` and `rules` are replaced wholesale. |
 
 ## GCP auth secrets
@@ -329,6 +331,7 @@ Returns `201`. Response shape:
 | ------ | ---- | ----- |
 | `GET`  | `/api/v1/gcp_auth_secrets?namespace=default` | List. |
 | `GET`  | `/api/v1/gcp_auth_secrets/:id` | Fetch one. |
+| `GET`  | `/api/v1/gcp_auth_secrets/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
 | `PUT`/`PATCH` | `/api/v1/gcp_auth_secrets/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`; same body as create. |
 
 ## OAuth token secrets
@@ -430,7 +433,74 @@ Returns `201`. Response shape (note that `credentials` and `token_endpoint_heade
 | ------ | ---- | ----- |
 | `GET`  | `/api/v1/oauth_token_secrets?namespace=default` | List. |
 | `GET`  | `/api/v1/oauth_token_secrets/:id` | Fetch one. |
+| `GET`  | `/api/v1/oauth_token_secrets/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
 | `PUT`/`PATCH` | `/api/v1/oauth_token_secrets/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`; same body as create. |
+
+## PG DSN secrets
+
+A PG DSN secret is a Postgres upstream credential: a connection string (DSN) resolved from a single secret [source](#secret-sources), plus an optional `SET ROLE` for the upstream session. It is delivered to `iron-proxy` keyed by `foreign_id`, and a proxy-local listener binds to it by that key. Because the binding key must exist, `foreign_id` is **required** here (unlike the other secret types).
+
+Listener and client knobs (bind address, client auth) are deliberately not modeled: they are proxy-host deployment concerns. There are no [request rules](#request-rules) either: a Postgres listener matches by port, not by request.
+
+### Attributes
+
+| Field         | In requests | Notes |
+| ------------- | ----------- | ----- |
+| `namespace`   | optional    | Defaults to `"default"`. Immutable after create. |
+| `foreign_id`  | required    | Unique per namespace. Immutable after create. |
+| `name`        | optional    | |
+| `description` | optional    | |
+| `labels`      | optional    | Object; defaults to `{}`. |
+| `role`        | optional    | Upstream `SET ROLE` applied to the session. |
+| `dsn`         | required    | A [secret source](#secret-sources) resolving to the connection string. Replaced wholesale on update. |
+
+### Create
+
+`POST /api/v1/pg_dsn_secrets`
+
+```json
+{
+  "data": {
+    "namespace": "default",
+    "foreign_id": "analytics-pg",
+    "name": "Analytics DB",
+    "description": "Read-only reporting",
+    "labels": { "team": "data" },
+    "role": "readonly",
+    "dsn": { "source_type": "env", "config": { "var": "PG_ANALYTICS_DSN" } }
+  }
+}
+```
+
+Returns `201` with the created resource. Response shape:
+
+```json
+{
+  "data": {
+    "id": "pgs_...",
+    "namespace": "default",
+    "foreign_id": "analytics-pg",
+    "name": "Analytics DB",
+    "description": "Read-only reporting",
+    "labels": { "team": "data" },
+    "role": "readonly",
+    "dsn": { "source_type": "env", "config": { "var": "PG_ANALYTICS_DSN" } },
+    "created_at": "2026-06-01T10:00:00Z",
+    "updated_at": "2026-06-01T10:00:00Z"
+  }
+}
+```
+
+The `dsn` in responses never includes a `control_plane` `secret` value.
+
+### Other operations
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| `GET`  | `/api/v1/pg_dsn_secrets?namespace=default` | List. `namespace` required; `labels[k]=v` and pagination optional. |
+| `GET`  | `/api/v1/pg_dsn_secrets/:id` | Fetch one. `404` if missing. |
+| `GET`  | `/api/v1/pg_dsn_secrets/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
+| `PUT`/`PATCH` | `/api/v1/pg_dsn_secrets/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`; same body as create. `dsn` is replaced wholesale. |
 
 ## Principals
 
@@ -472,9 +542,10 @@ Returns `201`:
 | Method | Path | Notes |
 | ------ | ---- | ----- |
 | `GET`  | `/api/v1/principals?namespace=default` | List. |
-| `GET`  | `/api/v1/principals/:id` | Fetch one. |
+| `GET`  | `/api/v1/principals/:id` | Fetch one by OID. To fetch by `foreign_id`, use the lookup route below. |
 | `GET`  | `/api/v1/principals/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
-| `GET`  | `/api/v1/principals/:id/effective_config` | [Effective config](#effective-config) the principal resolves to. `:id` is an OID or `foreign_id`. |
+| `GET`  | `/api/v1/principals/:id/effective_config` | [Effective config](#effective-config) the principal resolves to. `:id` is an OID. |
+| `GET`  | `/api/v1/principals/lookup/:namespace/:foreign_id/effective_config` | [Effective config](#effective-config) by namespace + foreign id. `404` if missing. |
 | `GET`  | `/api/v1/principals/:principal_id/grants` | [List the grants](#list-by-grantee) granted directly to the principal. |
 | `PUT`/`PATCH` | `/api/v1/principals/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`. Only `name` and `labels` are mutable on an existing record; `namespace`/`foreign_id` apply only when creating. |
 
@@ -483,8 +554,9 @@ See [Role assignments](#role-assignments) for attaching roles to a principal.
 ### Effective config
 
 `GET /api/v1/principals/:id/effective_config`
+`GET /api/v1/principals/lookup/:namespace/:foreign_id/effective_config`
 
-The config a principal resolves to, in the same shape `iron-proxy` receives on [proxy sync](#proxy-sync), for operator inspection. `:id` is an OID or a `foreign_id` scoped to the `namespace` query param (defaulting to `"default"`).
+The config a principal resolves to, in the same shape `iron-proxy` receives on [proxy sync](#proxy-sync), for operator inspection. The principal is addressed by OID (`:id`) or by an explicit namespace + `foreign_id` via the lookup route.
 
 Unlike proxy sync, this endpoint never reveals live secrets and does no config-hash negotiation:
 

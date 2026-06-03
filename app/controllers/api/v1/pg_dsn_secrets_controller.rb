@@ -11,6 +11,11 @@ module Api
         render json: { data: record_payload(ref) }
       end
 
+      # GET /api/v1/pg_dsn_secrets/lookup/:namespace/:foreign_id
+      def lookup
+        render json: { data: record_payload(find_by_foreign_id!(PgDsnSecret)) }
+      end
+
       def create
         ref = PgDsnSecret.new(created_by: current_user)
         assign_and_save!(ref, data_params)

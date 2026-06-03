@@ -30,6 +30,27 @@ module Api
         assert data.dig("credentials", "refresh_token").present?
       end
 
+      test "GET lookup finds an oauth_token secret by namespace and foreign_id" do
+        secret = oauth_token_secrets(:acme_gmail_oauth)
+        get lookup_api_v1_oauth_token_secrets_url(namespace: secret.namespace, foreign_id: secret.foreign_id),
+            headers: auth_headers
+        assert_response :ok
+        assert_equal secret.oid, json_body.dig("data", "id")
+      end
+
+      test "GET lookup scopes an oauth_token secret by namespace" do
+        secret = oauth_token_secrets(:acme_gmail_oauth)
+        get lookup_api_v1_oauth_token_secrets_url(namespace: "globex", foreign_id: secret.foreign_id),
+            headers: auth_headers
+        assert_response :not_found
+      end
+
+      test "GET lookup returns 404 when no oauth_token secret matches" do
+        get lookup_api_v1_oauth_token_secrets_url(namespace: "acme", foreign_id: "does-not-exist"),
+            headers: auth_headers
+        assert_response :not_found
+      end
+
       test "POST creates a refresh_token oauth secret" do
         body = {
           data: {

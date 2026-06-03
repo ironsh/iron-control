@@ -29,6 +29,27 @@ module Api
         assert_equal "storage-bot@acme.example", data["subject"]
       end
 
+      test "GET lookup finds a gcp_auth secret by namespace and foreign_id" do
+        secret = gcp_auth_secrets(:acme_gcs_keyfile)
+        get lookup_api_v1_gcp_auth_secrets_url(namespace: secret.namespace, foreign_id: secret.foreign_id),
+            headers: auth_headers
+        assert_response :ok
+        assert_equal secret.oid, json_body.dig("data", "id")
+      end
+
+      test "GET lookup scopes a gcp_auth secret by namespace" do
+        secret = gcp_auth_secrets(:acme_gcs_keyfile)
+        get lookup_api_v1_gcp_auth_secrets_url(namespace: "globex", foreign_id: secret.foreign_id),
+            headers: auth_headers
+        assert_response :not_found
+      end
+
+      test "GET lookup returns 404 when no gcp_auth secret matches" do
+        get lookup_api_v1_gcp_auth_secrets_url(namespace: "acme", foreign_id: "does-not-exist"),
+            headers: auth_headers
+        assert_response :not_found
+      end
+
       test "POST creates a gcp_auth secret with credentials_provider" do
         body = {
           data: {
