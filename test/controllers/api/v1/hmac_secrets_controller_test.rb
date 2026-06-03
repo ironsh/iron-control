@@ -131,6 +131,20 @@ module Api
         ids = json_body.fetch("data").map { |r| r["id"] }
         assert_includes ids, hmac_secrets(:acme_webhook_hmac).oid
       end
+
+      test "DELETE removes an hmac secret" do
+        secret = hmac_secrets(:acme_webhook_hmac)
+        assert_difference -> { HmacSecret.count } => -1 do
+          delete api_v1_hmac_secret_url(id: secret.oid), headers: auth_headers
+        end
+        assert_response :no_content
+        assert_nil HmacSecret.find_by_oid(secret.oid)
+      end
+
+      test "DELETE returns 404 for an unknown hmac secret" do
+        delete api_v1_hmac_secret_url(id: "hms_nope"), headers: auth_headers
+        assert_response :not_found
+      end
     end
   end
 end

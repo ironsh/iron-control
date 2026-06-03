@@ -174,6 +174,20 @@ module Api
         ids = json_body.fetch("data").map { |r| r["id"] }
         assert_includes ids, oauth_token_secrets(:acme_gmail_oauth).oid
       end
+
+      test "DELETE removes an oauth_token secret" do
+        secret = oauth_token_secrets(:acme_gmail_oauth)
+        assert_difference -> { OauthTokenSecret.count } => -1 do
+          delete api_v1_oauth_token_secret_url(id: secret.oid), headers: auth_headers
+        end
+        assert_response :no_content
+        assert_nil OauthTokenSecret.find_by_oid(secret.oid)
+      end
+
+      test "DELETE returns 404 for an unknown oauth_token secret" do
+        delete api_v1_oauth_token_secret_url(id: "ots_nope"), headers: auth_headers
+        assert_response :not_found
+      end
     end
   end
 end

@@ -35,6 +35,16 @@ module Api
         render_validation_error(e.record)
       end
 
+      # Destroying a secret cascades to its nested sources, rules, and any
+      # grants that reference it (dependent: :destroy), so the role and
+      # principal associations are removed without touching the roles or
+      # principals themselves.
+      def destroy
+        ref = OauthTokenSecret.find_by_oid!(params[:id])
+        ref.destroy!
+        head :no_content
+      end
+
       private
 
       # Builds the whole credential graph in memory and saves once so the
