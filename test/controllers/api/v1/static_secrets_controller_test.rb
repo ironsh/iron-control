@@ -62,6 +62,27 @@ module Api
         assert_response :not_found
       end
 
+      test "GET lookup finds a static secret by namespace and foreign_id" do
+        ref = static_secrets(:acme_prod_api_key)
+        get lookup_api_v1_static_secrets_url(namespace: ref.namespace, foreign_id: ref.foreign_id),
+            headers: auth_headers
+        assert_response :ok
+        assert_equal ref.oid, json_body.dig("data", "id")
+      end
+
+      test "GET lookup scopes a static secret by namespace" do
+        ref = static_secrets(:acme_prod_api_key)
+        get lookup_api_v1_static_secrets_url(namespace: "globex", foreign_id: ref.foreign_id),
+            headers: auth_headers
+        assert_response :not_found
+      end
+
+      test "GET lookup returns 404 when no static secret matches" do
+        get lookup_api_v1_static_secrets_url(namespace: "acme", foreign_id: "does-not-exist"),
+            headers: auth_headers
+        assert_response :not_found
+      end
+
       test "POST creates a SecretRef with nested source and rules in a single transaction" do
         body = {
           data: {

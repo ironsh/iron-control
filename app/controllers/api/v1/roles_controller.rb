@@ -11,11 +11,9 @@ module Api
         render json: { data: record_payload(role) }
       end
 
+      # GET /api/v1/roles/lookup/:namespace/:foreign_id
       def lookup
-        namespace = params.require(:namespace)
-        foreign_id = params.require(:foreign_id)
-        role = Role.find_by!(namespace: namespace, foreign_id: foreign_id)
-        render json: { data: record_payload(role) }
+        render json: { data: record_payload(find_by_foreign_id!(Role)) }
       end
 
       def create

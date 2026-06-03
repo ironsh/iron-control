@@ -49,6 +49,13 @@ module Api
         assert_response :not_found
       end
 
+      test "GET does not resolve a foreign_id passed as :id" do
+        principal = principals(:acme_channel)
+
+        get api_v1_principal_url(id: principal.foreign_id), headers: auth_headers
+        assert_response :not_found
+      end
+
       test "POST creates a Principal" do
         body = {
           data: {
@@ -355,21 +362,29 @@ module Api
         assert_equal "no-store", response.headers["Cache-Control"]
       end
 
-      test "GET effective_config resolves :id as a foreign_id within a namespace" do
+      test "GET effective_config resolves a namespaced foreign_id via the lookup route" do
         grant_sources_to_acme_channel
         principal = principals(:acme_channel)
 
-        get effective_config_api_v1_principal_url(id: principal.foreign_id),
-            params: { namespace: principal.namespace }, headers: auth_headers
+        get lookup_effective_config_api_v1_principals_url(namespace: principal.namespace,
+                                                          foreign_id: principal.foreign_id),
+            headers: auth_headers
         assert_response :ok
         assert_equal principal.oid, json_body.dig("data", "id")
         assert_equal 2, json_body.dig("data", "secrets").length
       end
 
-      test "GET effective_config scopes a foreign_id by namespace" do
+      test "GET effective_config lookup scopes a foreign_id by namespace" do
         principal = principals(:acme_channel)
-        get effective_config_api_v1_principal_url(id: principal.foreign_id),
-            params: { namespace: "globex" }, headers: auth_headers
+        get lookup_effective_config_api_v1_principals_url(namespace: "globex",
+                                                          foreign_id: principal.foreign_id),
+            headers: auth_headers
+        assert_response :not_found
+      end
+
+      test "GET effective_config does not resolve a foreign_id passed as :id" do
+        principal = principals(:acme_channel)
+        get effective_config_api_v1_principal_url(id: principal.foreign_id), headers: auth_headers
         assert_response :not_found
       end
 
@@ -378,9 +393,10 @@ module Api
         assert_response :not_found
       end
 
-      test "GET effective_config returns 404 for an unknown foreign_id" do
-        get effective_config_api_v1_principal_url(id: "U-does-not-exist"),
-            params: { namespace: "acme" }, headers: auth_headers
+      test "GET effective_config lookup returns 404 for an unknown foreign_id" do
+        get lookup_effective_config_api_v1_principals_url(namespace: "acme",
+                                                          foreign_id: "U-does-not-exist"),
+            headers: auth_headers
         assert_response :not_found
       end
 
