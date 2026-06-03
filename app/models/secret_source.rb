@@ -18,14 +18,17 @@ class SecretSource < ApplicationRecord
   # A source belongs to exactly one owner. static_secret feeds the `secrets`
   # transform; gcp_auth_secret is a gcp_auth keyfile; oauth_token_secret holds
   # one oauth_token entry's credential fields and token-endpoint headers;
-  # pg_dsn_secret is a Postgres upstream's connection string.
+  # pg_dsn_secret is a Postgres upstream's connection string; hmac_secret holds
+  # one hmac_sign entry's HMAC key and any additional named credentials.
   belongs_to :static_secret, optional: true
   belongs_to :gcp_auth_secret, optional: true
   belongs_to :oauth_token_secret, optional: true
   belongs_to :pg_dsn_secret, optional: true
+  belongs_to :hmac_secret, optional: true
 
-  # Only set for oauth_token_secret-owned sources: whether `role` names a
-  # credential field (client_id, ...) or a token-endpoint header.
+  # Only set for oauth_token_secret- and hmac_secret-owned sources: whether
+  # `role` names a credential field (client_id, secret, ...) or a token-endpoint
+  # header.
   enum :role_kind, { credential_field: "credential_field", endpoint_header: "endpoint_header" }, validate: { allow_nil: true }
 
   encrypts :secret
@@ -43,7 +46,10 @@ class SecretSource < ApplicationRecord
     source
   end
 
-  OWNER_ASSOCIATIONS = %i[static_secret gcp_auth_secret oauth_token_secret pg_dsn_secret].freeze
+  OWNER_ASSOCIATIONS = %i[static_secret gcp_auth_secret oauth_token_secret pg_dsn_secret hmac_secret].freeze
+
+  # Owners whose sources fill a named role (credential field or endpoint header).
+  ROLE_OWNERS = %i[oauth_token_secret hmac_secret].freeze
 
   validates :source_type, presence: true, inclusion: { in: SOURCE_TYPES }
   validate :config_is_a_hash
@@ -65,12 +71,12 @@ class SecretSource < ApplicationRecord
   end
 
   def role_matches_owner
-    if oauth_token_secret.present?
-      errors.add(:role, "can't be blank for an oauth_token_secret source") if role.blank?
-      errors.add(:role_kind, "can't be blank for an oauth_token_secret source") if role_kind.blank?
+    if ROLE_OWNERS.any? { |assoc| send(assoc).present? }
+      errors.add(:role, "can't be blank for a #{ROLE_OWNERS.join(" or ")} source") if role.blank?
+      errors.add(:role_kind, "can't be blank for a #{ROLE_OWNERS.join(" or ")} source") if role_kind.blank?
     else
-      errors.add(:role, "is only allowed for an oauth_token_secret source") if role.present?
-      errors.add(:role_kind, "is only allowed for an oauth_token_secret source") if role_kind.present?
+      errors.add(:role, "is only allowed for a #{ROLE_OWNERS.join(" or ")} source") if role.present?
+      errors.add(:role_kind, "is only allowed for a #{ROLE_OWNERS.join(" or ")} source") if role_kind.present?
     end
   end
 

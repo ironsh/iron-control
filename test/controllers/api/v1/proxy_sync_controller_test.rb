@@ -134,6 +134,21 @@ class ProxySyncControllerTest < ActionDispatch::IntegrationTest
     assert_equal 1, oauth.dig("config", "tokens").length
   end
 
+  test "transforms carries one hmac_sign transform per granted HmacSecret" do
+    admin = users(:acme_admin)
+    Grant.create!(principal: @proxy.principal, hmac_secret: hmac_secrets(:acme_webhook_hmac), created_by: admin)
+
+    post api_v1_proxy_sync_url, params: {}.to_json, headers: auth_headers
+    assert_response :ok
+
+    transforms = json_body.fetch("transforms")
+    hmac = transforms.find { |t| t["name"] == "hmac_sign" }
+    refute_nil hmac
+    assert_equal "sha256", hmac.dig("config", "signature", "algorithm")
+    assert_equal({ "type" => "env", "var" => "WEBHOOK_HMAC_KEY" }, hmac.dig("config", "credentials", "secret"))
+    assert_equal [ { "host" => "hooks.example.com", "methods" => [ "POST" ] } ], hmac.dig("config", "rules")
+  end
+
   test "transforms is an empty array when no transform grants exist" do
     post api_v1_proxy_sync_url, params: {}.to_json, headers: auth_headers
     assert_response :ok

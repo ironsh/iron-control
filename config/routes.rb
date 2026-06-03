@@ -31,6 +31,9 @@ Rails.application.routes.draw do
       resources :pg_dsn_secrets, only: %i[index show create update] do
         collection { get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup }
       end
+      resources :hmac_secrets, only: %i[index show create update] do
+        collection { get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup }
+      end
       resources :roles, only: %i[index show create update destroy] do
         collection do
           get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup

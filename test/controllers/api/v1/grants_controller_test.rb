@@ -94,6 +94,17 @@ module Api
         assert_equal secret.oid, json_body.dig("data", "oauth_token_secret_id")
       end
 
+      test "POST creates a Grant for an hmac secret" do
+        principal = principals(:globex_user)
+        secret = hmac_secrets(:acme_webhook_hmac)
+
+        body = { data: { principal_id: principal.oid, hmac_secret_id: secret.oid } }
+
+        post api_v1_grants_url, params: body.to_json, headers: auth_headers
+        assert_response :created
+        assert_equal secret.oid, json_body.dig("data", "hmac_secret_id")
+      end
+
       test "POST creates a Grant for a role grantee" do
         role = roles(:acme_admin_role)
         secret_ref = static_secrets(:github_token_inject)
