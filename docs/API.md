@@ -475,6 +475,7 @@ Returns `201`:
 | `GET`  | `/api/v1/principals/:id` | Fetch one. |
 | `GET`  | `/api/v1/principals/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
 | `GET`  | `/api/v1/principals/:id/effective_config` | [Effective config](#effective-config) the principal resolves to. `:id` is an OID or `foreign_id`. |
+| `GET`  | `/api/v1/principals/:principal_id/grants` | [List the grants](#list-by-grantee) granted directly to the principal. |
 | `PUT`/`PATCH` | `/api/v1/principals/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`. Only `name` and `labels` are mutable on an existing record; `namespace`/`foreign_id` apply only when creating. |
 
 See [Role assignments](#role-assignments) for attaching roles to a principal.
@@ -561,6 +562,7 @@ Returns `201`:
 | `GET`    | `/api/v1/roles?namespace=default` | List. `namespace` required; `labels[k]=v` and pagination optional. |
 | `GET`    | `/api/v1/roles/:id` | Fetch one. |
 | `GET`    | `/api/v1/roles/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
+| `GET`    | `/api/v1/roles/:role_id/grants` | [List the grants](#list-by-grantee) attached to the role. |
 | `PUT`/`PATCH` | `/api/v1/roles/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`. Only `name` and `labels` are mutable on an existing record; `namespace`/`foreign_id` apply only when creating. |
 | `DELETE` | `/api/v1/roles/:id` | Delete. Returns `204`. Cascades: the role's grants and its assignments are removed. |
 
@@ -615,6 +617,36 @@ Returns `201`. The response includes the one grantee key and the one secret-type
 ```
 
 Referencing a missing grantee or secret returns `404`. Supplying no grantee returns `422` with `"must reference one of principal_id, role_id"`; supplying no secret returns `422` with `"must reference one of static_secret_id, gcp_auth_secret_id, oauth_token_secret_id"`.
+
+### List by grantee
+
+List the grants attached to a single grantee. The endpoints are nested under the grantee, which is identified by its OID. The grantee is resolved first, so an unknown principal or role returns `404` rather than an empty list; a grantee with no grants returns `200` with an empty `data` array.
+
+`GET /api/v1/principals/:principal_id/grants`
+
+Returns `200`. Results use the standard [paginated](#conventions) envelope, and each entry has the same shape as `GET /api/v1/grants/:id`:
+
+```json
+{
+  "data": [
+    {
+      "id": "grant_...",
+      "principal_id": "prn_...",
+      "static_secret_id": "ssr_...",
+      "created_at": "2026-06-01T10:00:00Z",
+      "updated_at": "2026-06-01T10:00:00Z"
+    }
+  ],
+  "meta": { "page": 1, "limit": 50, "total": 1, "total_pages": 1 }
+}
+```
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| `GET`  | `/api/v1/principals/:principal_id/grants` | List the grants granted directly to the principal. Paginated; `404` if the principal is unknown. |
+| `GET`  | `/api/v1/roles/:role_id/grants` | List the grants attached to the role. Paginated; `404` if the role is unknown. |
+
+The principal endpoint lists only the principal's **direct** grants, not those it resolves through roles. For everything a principal resolves to, see [effective config](#effective-config).
 
 ### Other operations
 
