@@ -41,6 +41,26 @@ module Api
         render_validation_error(e.record)
       end
 
+      # GET /api/v1/principals/:id/effective_config
+      #
+      # :id accepts either an opaque oid or a foreign_id (scoped to the
+      # `namespace` query param, defaulting to "default").
+      #
+      # The config this principal resolves to, in the same shape iron-proxy
+      # receives on /sync, for operator inspection. Unlike /sync it never reveals
+      # live secrets (inline control_plane values are redacted) and does no
+      # config-hash negotiation. We send a content-derived ETag for change
+      # detection but mark the response no-store, since it reflects mutable
+      # grants and must never be served from a cache.
+      def effective_config
+        principal = resolve_for_read(Principal)
+        body = { data: { id: principal.oid }.merge(principal.effective_config) }.to_json
+
+        response.headers["ETag"] = %("#{Digest::SHA256.hexdigest(body)}")
+        response.headers["Cache-Control"] = "no-store"
+        render json: body
+      end
+
       private
 
       def record_payload(principal)

@@ -37,74 +37,39 @@ class Proxy < ApplicationRecord
     Digest::SHA256.hexdigest(plaintext)
   end
 
-  # Static secrets this proxy may receive, via its principal's effective grants
-  # (direct grants plus grants from every assigned role).
+  # The granted secrets and sync payloads are a function of the assigned
+  # principal's effective grants, so the assembly lives on Principal. An
+  # unassigned proxy carries no authority and resolves to empty collections.
   def granted_static_secrets
-    return StaticSecret.none unless principal
-    StaticSecret
-      .where(id: principal.effective_grants.select(:static_secret_id))
-      .includes(:source, :rules)
-      .order(:id)
+    principal&.granted_static_secrets || StaticSecret.none
   end
 
-  # gcp_auth credentials this proxy may receive, via its principal's effective grants.
   def granted_gcp_auth_secrets
-    return GcpAuthSecret.none unless principal
-    GcpAuthSecret
-      .where(id: principal.effective_grants.select(:gcp_auth_secret_id))
-      .includes(:keyfile_source, :rules)
-      .order(:id)
+    principal&.granted_gcp_auth_secrets || GcpAuthSecret.none
   end
 
-  # oauth_token credentials this proxy may receive, via its principal's effective grants.
   def granted_oauth_token_secrets
-    return OauthTokenSecret.none unless principal
-    OauthTokenSecret
-      .where(id: principal.effective_grants.select(:oauth_token_secret_id))
-      .includes(:sources, :rules)
-      .order(:id)
+    principal&.granted_oauth_token_secrets || OauthTokenSecret.none
   end
 
-  # Postgres upstreams this proxy may serve, via its principal's effective grants.
   def granted_pg_dsn_secrets
-    return PgDsnSecret.none unless principal
-    PgDsnSecret
-      .where(id: principal.effective_grants.select(:pg_dsn_secret_id))
-      .includes(:dsn_source)
-      .order(:id)
+    principal&.granted_pg_dsn_secrets || PgDsnSecret.none
   end
 
-  # The `secrets` array delivered to iron-proxy. Each entry maps to the proxy's
-  # `secrets` transform `secretEntry` shape. Secrets without a source are skipped
-  # because the proxy requires a source to resolve a value.
+  # The `secrets` array delivered to iron-proxy; empty when unassigned.
   def sync_secrets
-    granted_static_secrets.filter_map do |ss|
-      next unless ss.source
-      ss.to_proxy_secret
-    end
+    principal&.sync_secrets || []
   end
 
-  # The `transforms` array delivered to iron-proxy: one gcp_auth transform per
-  # granted GcpAuthSecret, plus a single oauth_token transform bundling every
-  # granted OauthTokenSecret as one `tokens` entry.
+  # The `transforms` array delivered to iron-proxy; empty when unassigned.
   def sync_transforms
-    transforms = granted_gcp_auth_secrets.map(&:to_proxy_transform)
-
-    oauth_entries = granted_oauth_token_secrets.map(&:to_proxy_entry)
-    transforms << { "name" => "oauth_token", "config" => { "tokens" => oauth_entries } } if oauth_entries.any?
-
-    transforms
+    principal&.sync_transforms || []
   end
 
-  # The top-level `postgres` array delivered to iron-proxy: one DSN entry per
-  # granted PgDsnSecret, keyed by foreign_id. The proxy's local listeners bind to
-  # these by foreign_id. Entries without a DSN source are skipped because the
-  # proxy can't dial an upstream without one.
+  # The top-level `postgres` array delivered to iron-proxy; empty when
+  # unassigned. The proxy's local listeners bind to these by foreign_id.
   def sync_postgres
-    granted_pg_dsn_secrets.filter_map do |pg|
-      next unless pg.dsn_source
-      pg.to_proxy_dsn
-    end
+    principal&.sync_postgres || []
   end
 
   # Opaque, deterministic fingerprint of the delivered config. The proxy treats
