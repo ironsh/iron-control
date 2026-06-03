@@ -3,7 +3,7 @@
     {
       "warning_type": "Mass Assignment",
       "warning_code": 70,
-      "fingerprint": "bac9a4d1c30704a2a768427fa93339a442ce2987b252d928041b3bdbb6775e90",
+      "fingerprint": "4d16cc7473edcb8465102bb71cf4c19ca63833dadd4b6406687a6accb3f6e81b",
       "check_name": "PermitAttributes",
       "message": "Potentially dangerous key allowed for mass assignment",
       "file": "app/controllers/api/v1/pg_dsn_secrets_controller.rb",
