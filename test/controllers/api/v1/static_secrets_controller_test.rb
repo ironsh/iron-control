@@ -431,6 +431,38 @@ module Api
         assert_response :ok
         assert_equal 200, json_body.dig("meta", "limit")
       end
+
+      test "DELETE removes a static secret and its grants without deleting grantees" do
+        secret = static_secrets(:github_token_inject)
+        principal_grant = grants(:acme_channel_github_token)
+
+        assert_difference -> { StaticSecret.count } => -1, -> { Grant.count } => -1 do
+          delete api_v1_static_secret_url(id: secret.oid), headers: auth_headers
+        end
+        assert_response :no_content
+        assert_nil StaticSecret.find_by_oid(secret.oid)
+        refute Grant.exists?(principal_grant.id)
+        # The principal that held the grant is untouched.
+        assert Principal.exists?(principals(:acme_channel).id)
+      end
+
+      test "DELETE drops a role association when the secret is granted to a role" do
+        secret = static_secrets(:acme_prod_api_key)
+        role_grant = grants(:acme_infra_prod_api_key)
+
+        assert_difference -> { Grant.count } => -1 do
+          delete api_v1_static_secret_url(id: secret.oid), headers: auth_headers
+        end
+        assert_response :no_content
+        refute Grant.exists?(role_grant.id)
+        # The role that held the grant is untouched.
+        assert Role.exists?(roles(:acme_infra).id)
+      end
+
+      test "DELETE returns 404 for an unknown static secret" do
+        delete api_v1_static_secret_url(id: "ssr_nope"), headers: auth_headers
+        assert_response :not_found
+      end
     end
   end
 end

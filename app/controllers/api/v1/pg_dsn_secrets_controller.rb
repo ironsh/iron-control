@@ -35,6 +35,15 @@ module Api
         render_validation_error(e.record)
       end
 
+      # Destroying a secret cascades to its nested source and any grants that
+      # reference it (dependent: :destroy), so the role and principal
+      # associations are removed without touching the roles or principals.
+      def destroy
+        ref = PgDsnSecret.find_by_oid!(params[:id])
+        ref.destroy!
+        head :no_content
+      end
+
       private
 
       def assign_and_save!(ref, attrs)

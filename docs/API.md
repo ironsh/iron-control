@@ -251,6 +251,7 @@ The `source` in responses never includes a `control_plane` `secret` value.
 | `GET`  | `/api/v1/static_secrets/:id` | Fetch one. `404` if missing. |
 | `GET`  | `/api/v1/static_secrets/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
 | `PUT`/`PATCH` | `/api/v1/static_secrets/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`; same body as create. `source` and `rules` are replaced wholesale. |
+| `DELETE` | `/api/v1/static_secrets/:id` | Delete. Returns `204`; `404` if missing. Cascades: the secret's source, rules, and any grants that reference it are removed. The granted roles and principals are not deleted. |
 
 ## GCP auth secrets
 
@@ -334,6 +335,7 @@ Returns `201`. Response shape:
 | `GET`  | `/api/v1/gcp_auth_secrets/:id` | Fetch one. |
 | `GET`  | `/api/v1/gcp_auth_secrets/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
 | `PUT`/`PATCH` | `/api/v1/gcp_auth_secrets/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`; same body as create. |
+| `DELETE` | `/api/v1/gcp_auth_secrets/:id` | Delete. Returns `204`; `404` if missing. Cascades: the secret's sources, rules, and any grants that reference it are removed. The granted roles and principals are not deleted. |
 
 ## OAuth token secrets
 
@@ -436,6 +438,7 @@ Returns `201`. Response shape (note that `credentials` and `token_endpoint_heade
 | `GET`  | `/api/v1/oauth_token_secrets/:id` | Fetch one. |
 | `GET`  | `/api/v1/oauth_token_secrets/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
 | `PUT`/`PATCH` | `/api/v1/oauth_token_secrets/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`; same body as create. |
+| `DELETE` | `/api/v1/oauth_token_secrets/:id` | Delete. Returns `204`; `404` if missing. Cascades: the secret's sources, rules, and any grants that reference it are removed. The granted roles and principals are not deleted. |
 
 ## PG DSN secrets
 
@@ -505,6 +508,7 @@ The `dsn` in responses never includes a `control_plane` `secret` value.
 | `GET`  | `/api/v1/pg_dsn_secrets/:id` | Fetch one. `404` if missing. |
 | `GET`  | `/api/v1/pg_dsn_secrets/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
 | `PUT`/`PATCH` | `/api/v1/pg_dsn_secrets/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`; same body as create. `dsn` is replaced wholesale. |
+| `DELETE` | `/api/v1/pg_dsn_secrets/:id` | Delete. Returns `204`; `404` if missing. Cascades: the secret's source and any grants that reference it are removed. The granted roles and principals are not deleted. |
 
 ## HMAC secrets
 
@@ -596,6 +600,7 @@ Returns `201`. Response shape (note that `credentials` echoes each source as `{ 
 | `GET`  | `/api/v1/hmac_secrets/:id` | Fetch one. |
 | `GET`  | `/api/v1/hmac_secrets/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
 | `PUT`/`PATCH` | `/api/v1/hmac_secrets/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`; same body as create. |
+| `DELETE` | `/api/v1/hmac_secrets/:id` | Delete. Returns `204`; `404` if missing. Cascades: the secret's sources, rules, and any grants that reference it are removed. The granted roles and principals are not deleted. |
 
 ## Principals
 

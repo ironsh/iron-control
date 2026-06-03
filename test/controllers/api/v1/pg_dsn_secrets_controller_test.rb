@@ -143,6 +143,24 @@ module Api
         ids = json_body.fetch("data").map { |r| r["id"] }
         assert_includes ids, pg_dsn_secrets(:acme_analytics_pg).oid
       end
+
+      test "DELETE removes a pg_dsn secret and its grants without deleting grantees" do
+        secret = pg_dsn_secrets(:acme_analytics_pg)
+        grant = grants(:acme_channel_analytics_pg)
+
+        assert_difference -> { PgDsnSecret.count } => -1, -> { Grant.count } => -1 do
+          delete api_v1_pg_dsn_secret_url(id: secret.oid), headers: auth_headers
+        end
+        assert_response :no_content
+        assert_nil PgDsnSecret.find_by_oid(secret.oid)
+        refute Grant.exists?(grant.id)
+        assert Principal.exists?(principals(:acme_channel).id)
+      end
+
+      test "DELETE returns 404 for an unknown pg_dsn secret" do
+        delete api_v1_pg_dsn_secret_url(id: "pgs_nope"), headers: auth_headers
+        assert_response :not_found
+      end
     end
   end
 end

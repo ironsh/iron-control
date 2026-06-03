@@ -19,19 +19,19 @@ Rails.application.routes.draw do
     namespace :v1 do
       # Each secret type is addressable by opaque oid (member routes) or by an
       # explicit namespace + foreign_id via the namespaced lookup route.
-      resources :static_secrets, only: %i[index show create update] do
+      resources :static_secrets, only: %i[index show create update destroy] do
         collection { get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup }
       end
-      resources :gcp_auth_secrets, only: %i[index show create update] do
+      resources :gcp_auth_secrets, only: %i[index show create update destroy] do
         collection { get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup }
       end
-      resources :oauth_token_secrets, only: %i[index show create update] do
+      resources :oauth_token_secrets, only: %i[index show create update destroy] do
         collection { get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup }
       end
-      resources :pg_dsn_secrets, only: %i[index show create update] do
+      resources :pg_dsn_secrets, only: %i[index show create update destroy] do
         collection { get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup }
       end
-      resources :hmac_secrets, only: %i[index show create update] do
+      resources :hmac_secrets, only: %i[index show create update destroy] do
         collection { get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup }
       end
       resources :roles, only: %i[index show create update destroy] do

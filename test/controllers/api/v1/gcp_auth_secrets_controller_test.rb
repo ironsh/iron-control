@@ -166,6 +166,20 @@ module Api
         ids = json_body.fetch("data").map { |r| r["id"] }
         assert_includes ids, gcp_auth_secrets(:acme_bigquery).oid
       end
+
+      test "DELETE removes a gcp_auth secret" do
+        secret = gcp_auth_secrets(:acme_bigquery)
+        assert_difference -> { GcpAuthSecret.count } => -1 do
+          delete api_v1_gcp_auth_secret_url(id: secret.oid), headers: auth_headers
+        end
+        assert_response :no_content
+        assert_nil GcpAuthSecret.find_by_oid(secret.oid)
+      end
+
+      test "DELETE returns 404 for an unknown gcp_auth secret" do
+        delete api_v1_gcp_auth_secret_url(id: "gas_nope"), headers: auth_headers
+        assert_response :not_found
+      end
     end
   end
 end
