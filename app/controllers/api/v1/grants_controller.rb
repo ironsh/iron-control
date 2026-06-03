@@ -15,7 +15,8 @@ module Api
         static_secret_id: StaticSecret,
         gcp_auth_secret_id: GcpAuthSecret,
         oauth_token_secret_id: OauthTokenSecret,
-        pg_dsn_secret_id: PgDsnSecret
+        pg_dsn_secret_id: PgDsnSecret,
+        hmac_secret_id: HmacSecret
       }.freeze
 
       def create

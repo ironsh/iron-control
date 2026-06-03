@@ -144,20 +144,20 @@ class SecretSourceTest < ActiveSupport::TestCase
                    static_secret: static_secrets(:github_token_inject),
                    gcp_auth_secret: gcp_auth_secrets(:acme_bigquery))
     assert_not s.valid?
-    assert_includes s.errors[:base], "must belong to at most one of static_secret, gcp_auth_secret, oauth_token_secret, pg_dsn_secret"
+    assert_includes s.errors[:base], "must belong to at most one of static_secret, gcp_auth_secret, oauth_token_secret, pg_dsn_secret, hmac_secret"
   end
 
-  test "role is only allowed for an oauth_token_secret source" do
+  test "role is only allowed for an oauth_token_secret or hmac_secret source" do
     s = new_source(source_type: "env", config: { "var" => "FOO" },
                    static_secret: static_secrets(:github_token_inject), role: "client_id")
     assert_not s.valid?
-    assert_includes s.errors[:role], "is only allowed for an oauth_token_secret source"
+    assert_includes s.errors[:role], "is only allowed for a oauth_token_secret or hmac_secret source"
   end
 
   test "role is required for an oauth_token_secret source" do
     s = new_source(source_type: "env", config: { "var" => "FOO" },
                    oauth_token_secret: oauth_token_secrets(:acme_gmail_oauth))
     assert_not s.valid?
-    assert_includes s.errors[:role], "can't be blank for an oauth_token_secret source"
+    assert_includes s.errors[:role], "can't be blank for a oauth_token_secret or hmac_secret source"
   end
 end

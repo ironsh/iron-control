@@ -59,6 +59,14 @@ class Principal < ApplicationRecord
       .order(:id)
   end
 
+  # hmac_sign credentials this principal resolves to, via its effective grants.
+  def granted_hmac_secrets
+    HmacSecret
+      .where(id: effective_grants.select(:hmac_secret_id))
+      .includes(:sources, :rules)
+      .order(:id)
+  end
+
   # Postgres upstreams this principal resolves to, via its effective grants.
   def granted_pg_dsn_secrets
     PgDsnSecret
@@ -78,10 +86,12 @@ class Principal < ApplicationRecord
   end
 
   # The `transforms` array delivered to iron-proxy: one gcp_auth transform per
-  # granted GcpAuthSecret, plus a single oauth_token transform bundling every
-  # granted OauthTokenSecret as one `tokens` entry.
+  # granted GcpAuthSecret, one hmac_sign transform per granted HmacSecret, plus a
+  # single oauth_token transform bundling every granted OauthTokenSecret as one
+  # `tokens` entry.
   def sync_transforms
     transforms = granted_gcp_auth_secrets.map(&:to_proxy_transform)
+    transforms += granted_hmac_secrets.map(&:to_proxy_transform)
 
     oauth_entries = granted_oauth_token_secrets.map(&:to_proxy_entry)
     transforms << { "name" => "oauth_token", "config" => { "tokens" => oauth_entries } } if oauth_entries.any?

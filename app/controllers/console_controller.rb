@@ -11,7 +11,8 @@ class ConsoleController < ApplicationController
     "static" => { model: StaticSecret, label: "Static", includes: :source },
     "gcp_auth" => { model: GcpAuthSecret, label: "GCP Auth", includes: :keyfile_source },
     "oauth_token" => { model: OauthTokenSecret, label: "OAuth Token", includes: :sources },
-    "pg_dsn" => { model: PgDsnSecret, label: "Postgres DSN", includes: :dsn_source }
+    "pg_dsn" => { model: PgDsnSecret, label: "Postgres DSN", includes: :dsn_source },
+    "hmac" => { model: HmacSecret, label: "HMAC", includes: :sources }
   }.freeze
 
   # The config key that carries a source's human-meaningful reference, per
@@ -34,7 +35,8 @@ class ConsoleController < ApplicationController
       "static" => @principal.granted_static_secrets,
       "gcp_auth" => @principal.granted_gcp_auth_secrets,
       "oauth_token" => @principal.granted_oauth_token_secrets,
-      "pg_dsn" => @principal.granted_pg_dsn_secrets
+      "pg_dsn" => @principal.granted_pg_dsn_secrets,
+      "hmac" => @principal.granted_hmac_secrets
     }
   rescue ActiveRecord::RecordNotFound
     render plain: "principal not found", status: :not_found
@@ -64,6 +66,10 @@ class ConsoleController < ApplicationController
       fields = record.sources.select(&:credential_field?).sort_by(&:role)
       labels = fields.map { |s| "#{s.role}=#{source_label(s)}" }
       labels.presence&.join("  ·  ")
+    when HmacSecret
+      fields = record.sources.sort_by(&:role)
+      labels = fields.map { |s| "#{s.role}=#{source_label(s)}" }
+      labels.presence&.join("  ·  ")
     end
   end
 
@@ -79,6 +85,9 @@ class ConsoleController < ApplicationController
       header = record.header.presence || "Authorization"
       prefix = record.value_prefix.presence&.strip
       prefix ? "#{header}: #{prefix} …" : header
+    when HmacSecret
+      names = Array(record.headers).filter_map { |h| h["name"].presence if h.is_a?(Hash) }
+      names.presence&.join(", ")
     when PgDsnSecret then nil
     end
   end

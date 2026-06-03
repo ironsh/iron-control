@@ -24,3 +24,9 @@ oauth_gmail_host:
   http_methods: ["GET"]
   paths: []
   oauth_token_secret: acme_gmail_oauth
+
+hmac_webhook_host:
+  host: hooks.example.com
+  http_methods: ["POST"]
+  paths: []
+  hmac_secret: acme_webhook_hmac
