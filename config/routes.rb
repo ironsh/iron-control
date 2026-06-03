@@ -41,4 +41,7 @@ Rails.application.routes.draw do
       post "proxy/sync", to: "proxy_sync#create"
     end
   end
+
+  # Render a JSON 404 for any unmatched route instead of the static error page.
+  match "*path", to: "errors#not_found", via: :all
 end
