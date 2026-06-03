@@ -26,6 +26,7 @@ class PgDsnSecret < ApplicationRecord
   # secrets source shape.
   def to_proxy_dsn
     entry = { "id" => oid, "foreign_id" => foreign_id, "dsn" => dsn_source&.to_proxy_source }
+    entry["database"] = database if database.present?
     entry["role"] = role if role.present?
     entry
   end
