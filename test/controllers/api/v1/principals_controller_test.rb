@@ -304,6 +304,90 @@ module Api
         assert_response :ok
         assert_equal 200, json_body.dig("meta", "limit")
       end
+
+      # acme_channel is granted github_token_inject and db_password_replace (see
+      # grants.yml); give them sources so they materialize into the config.
+      def grant_sources_to_acme_channel
+        SecretSource.create!(source_type: "env", config: { "var" => "GITHUB_TOKEN" },
+                             static_secret: static_secrets(:github_token_inject))
+        SecretSource.create!(source_type: "control_plane", secret: "s3cr3t-db-pass",
+                             static_secret: static_secrets(:db_password_replace))
+      end
+
+      test "GET effective_config returns the principal's resolved config" do
+        grant_sources_to_acme_channel
+        principal = principals(:acme_channel)
+
+        get effective_config_api_v1_principal_url(id: principal.oid), headers: auth_headers
+        assert_response :ok
+
+        data = json_body.fetch("data")
+        assert_equal principal.oid, data["id"]
+        assert_equal 2, data.fetch("secrets").length
+        assert_kind_of Array, data.fetch("transforms")
+        assert_kind_of Array, data.fetch("postgres")
+      end
+
+      test "GET effective_config redacts inline control_plane secret values" do
+        grant_sources_to_acme_channel
+
+        get effective_config_api_v1_principal_url(id: principals(:acme_channel).oid), headers: auth_headers
+        assert_response :ok
+
+        entry = json_body.dig("data", "secrets").find { |s| s.dig("source", "type") == "control_plane" }
+        refute_nil entry
+        assert_equal "[redacted]", entry.dig("source", "value")
+        # A reference-style source passes through unredacted.
+        env = json_body.dig("data", "secrets").find { |s| s.dig("source", "type") == "env" }
+        assert_equal "GITHUB_TOKEN", env.dig("source", "var")
+      end
+
+      test "GET effective_config omits the config_hash" do
+        get effective_config_api_v1_principal_url(id: principals(:acme_channel).oid), headers: auth_headers
+        assert_response :ok
+        refute json_body.fetch("data").key?("config_hash")
+      end
+
+      test "GET effective_config sends an ETag and forbids caching" do
+        get effective_config_api_v1_principal_url(id: principals(:acme_channel).oid), headers: auth_headers
+        assert_response :ok
+        assert_match(/\A"[0-9a-f]{64}"\z/, response.headers["ETag"])
+        assert_equal "no-store", response.headers["Cache-Control"]
+      end
+
+      test "GET effective_config resolves :id as a foreign_id within a namespace" do
+        grant_sources_to_acme_channel
+        principal = principals(:acme_channel)
+
+        get effective_config_api_v1_principal_url(id: principal.foreign_id),
+            params: { namespace: principal.namespace }, headers: auth_headers
+        assert_response :ok
+        assert_equal principal.oid, json_body.dig("data", "id")
+        assert_equal 2, json_body.dig("data", "secrets").length
+      end
+
+      test "GET effective_config scopes a foreign_id by namespace" do
+        principal = principals(:acme_channel)
+        get effective_config_api_v1_principal_url(id: principal.foreign_id),
+            params: { namespace: "globex" }, headers: auth_headers
+        assert_response :not_found
+      end
+
+      test "GET effective_config returns 404 for an unknown oid" do
+        get effective_config_api_v1_principal_url(id: "prn_nope"), headers: auth_headers
+        assert_response :not_found
+      end
+
+      test "GET effective_config returns 404 for an unknown foreign_id" do
+        get effective_config_api_v1_principal_url(id: "U-does-not-exist"),
+            params: { namespace: "acme" }, headers: auth_headers
+        assert_response :not_found
+      end
+
+      test "GET effective_config rejects unauthenticated requests" do
+        get effective_config_api_v1_principal_url(id: principals(:acme_channel).oid)
+        assert_response :unauthorized
+      end
     end
   end
 end

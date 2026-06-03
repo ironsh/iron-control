@@ -37,90 +37,25 @@ class Proxy < ApplicationRecord
     Digest::SHA256.hexdigest(plaintext)
   end
 
-  # Static secrets this proxy may receive, via its principal's effective grants
-  # (direct grants plus grants from every assigned role).
-  def granted_static_secrets
-    return StaticSecret.none unless principal
-    StaticSecret
-      .where(id: principal.effective_grants.select(:static_secret_id))
-      .includes(:source, :rules)
-      .order(:id)
-  end
-
-  # gcp_auth credentials this proxy may receive, via its principal's effective grants.
-  def granted_gcp_auth_secrets
-    return GcpAuthSecret.none unless principal
-    GcpAuthSecret
-      .where(id: principal.effective_grants.select(:gcp_auth_secret_id))
-      .includes(:keyfile_source, :rules)
-      .order(:id)
-  end
-
-  # oauth_token credentials this proxy may receive, via its principal's effective grants.
-  def granted_oauth_token_secrets
-    return OauthTokenSecret.none unless principal
-    OauthTokenSecret
-      .where(id: principal.effective_grants.select(:oauth_token_secret_id))
-      .includes(:sources, :rules)
-      .order(:id)
-  end
-
-  # Postgres upstreams this proxy may serve, via its principal's effective grants.
-  def granted_pg_dsn_secrets
-    return PgDsnSecret.none unless principal
-    PgDsnSecret
-      .where(id: principal.effective_grants.select(:pg_dsn_secret_id))
-      .includes(:dsn_source)
-      .order(:id)
-  end
-
-  # The `secrets` array delivered to iron-proxy. Each entry maps to the proxy's
-  # `secrets` transform `secretEntry` shape. Secrets without a source are skipped
-  # because the proxy requires a source to resolve a value.
-  def sync_secrets
-    granted_static_secrets.filter_map do |ss|
-      next unless ss.source
-      ss.to_proxy_secret
-    end
-  end
-
-  # The `transforms` array delivered to iron-proxy: one gcp_auth transform per
-  # granted GcpAuthSecret, plus a single oauth_token transform bundling every
-  # granted OauthTokenSecret as one `tokens` entry.
-  def sync_transforms
-    transforms = granted_gcp_auth_secrets.map(&:to_proxy_transform)
-
-    oauth_entries = granted_oauth_token_secrets.map(&:to_proxy_entry)
-    transforms << { "name" => "oauth_token", "config" => { "tokens" => oauth_entries } } if oauth_entries.any?
-
-    transforms
-  end
-
-  # The top-level `postgres` array delivered to iron-proxy: one DSN entry per
-  # granted PgDsnSecret, keyed by foreign_id. The proxy's local listeners bind to
-  # these by foreign_id. Entries without a DSN source are skipped because the
-  # proxy can't dial an upstream without one.
-  def sync_postgres
-    granted_pg_dsn_secrets.filter_map do |pg|
-      next unless pg.dsn_source
-      pg.to_proxy_dsn
-    end
+  # The config this proxy delivers, in the iron-proxy sync shape. The assembly
+  # lives on Principal (it is a function of effective grants); an unassigned
+  # proxy carries no authority and resolves to the empty config. Live secret
+  # values are kept inline here because the proxy needs them to resolve.
+  def sync_config
+    principal&.effective_config(redact_secrets: false) || Principal::EMPTY_CONFIG
   end
 
   # Opaque, deterministic fingerprint of the delivered config. The proxy treats
   # this as an ETag: it echoes its current hash on each sync and only re-applies
   # config when the hash changes.
   def config_hash
-    payload = {
-      # The principal identity and assignment time are folded in so that any
-      # assignment change forces a refresh, even a swap between principals whose
-      # effective secrets happen to be identical (or an unassign to empty).
+    # The principal identity and assignment time are folded in so that any
+    # assignment change forces a refresh, even a swap between principals whose
+    # effective secrets happen to be identical (or an unassign to empty).
+    payload = sync_config.merge(
       "principal" => principal&.oid,
-      "principal_assigned_at" => principal_assigned_at&.utc&.iso8601,
-      "secrets" => sync_secrets,
-      "transforms" => sync_transforms,
-      "postgres" => sync_postgres
-    }
+      "principal_assigned_at" => principal_assigned_at&.utc&.iso8601
+    )
     "sha256:#{Digest::SHA256.hexdigest(self.class.canonical_json(payload))}"
   end
 

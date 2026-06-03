@@ -474,9 +474,48 @@ Returns `201`:
 | `GET`  | `/api/v1/principals?namespace=default` | List. |
 | `GET`  | `/api/v1/principals/:id` | Fetch one. |
 | `GET`  | `/api/v1/principals/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
+| `GET`  | `/api/v1/principals/:id/effective_config` | [Effective config](#effective-config) the principal resolves to. `:id` is an OID or `foreign_id`. |
 | `PUT`/`PATCH` | `/api/v1/principals/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`. Only `name` and `labels` are mutable on an existing record; `namespace`/`foreign_id` apply only when creating. |
 
 See [Role assignments](#role-assignments) for attaching roles to a principal.
+
+### Effective config
+
+`GET /api/v1/principals/:id/effective_config`
+
+The config a principal resolves to, in the same shape `iron-proxy` receives on [proxy sync](#proxy-sync), for operator inspection. `:id` is an OID or a `foreign_id` scoped to the `namespace` query param (defaulting to `"default"`).
+
+Unlike proxy sync, this endpoint never reveals live secrets and does no config-hash negotiation:
+
+- Inline `control_plane` source values are redacted to `"[redacted]"`. Every other source type carries only a reference (an env var name, a `secret_id`, ...), so it passes through unchanged.
+- There is no `config_hash`, `status`, or `principal_id` field, and no hash request param.
+- The response carries a content-derived `ETag` for change detection and `Cache-Control: no-store`, so it is never served from a cache.
+
+Returns `200`:
+
+```json
+{
+  "data": {
+    "id": "prn_...",
+    "secrets": [
+      {
+        "source": { "type": "env", "var": "GITHUB_TOKEN" },
+        "inject": { "header": "Authorization", "formatter": "Bearer {{ .Value }}" },
+        "rules": [ { "host": "api.github.com", "methods": ["GET", "POST"], "paths": ["/repos/*"] } ]
+      },
+      {
+        "source": { "type": "control_plane", "value": "[redacted]" },
+        "replace": { "proxy_value": "__DB_PASSWORD__" },
+        "rules": [ { "host": "db.internal", "methods": ["*"] } ]
+      }
+    ],
+    "transforms": [],
+    "postgres": []
+  }
+}
+```
+
+The `secrets`, `transforms`, and `postgres` arrays are assembled exactly as in [proxy sync](#proxy-sync), covering the principal's effective grants (direct plus any held via a [role](#roles)). See that section for the per-field details.
 
 ## Roles
 

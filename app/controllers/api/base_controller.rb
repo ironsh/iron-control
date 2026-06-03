@@ -72,6 +72,21 @@ module Api
       end
     end
 
+    # Read-side counterpart to resolve_for_upsert: resolves :id to an existing
+    # record, accepting either an opaque id or a foreign_id. A foreign_id is
+    # scoped to the `namespace` query param (defaulting to "default"). Raises
+    # ActiveRecord::RecordNotFound when nothing matches. The two identifier forms
+    # stay unambiguous because a foreign_id can never start with the oid prefix.
+    def resolve_for_read(model)
+      identifier = params[:id].to_s
+      if identifier.start_with?("#{model.oid_prefix}_")
+        model.find_by_oid!(identifier)
+      else
+        namespace = params[:namespace].presence || "default"
+        model.find_by!(namespace: namespace, foreign_id: identifier)
+      end
+    end
+
     DEFAULT_PAGE_LIMIT = 50
     MAX_PAGE_LIMIT = 200
 

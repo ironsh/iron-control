@@ -23,15 +23,17 @@ module Api
         if params[:config_hash].presence == current_hash
           render json: { config_hash: current_hash }
         else
-          # status and principal_id let an unassigned proxy tell "no config yet"
-          # apart from "config is genuinely empty", and let it detect a swap.
+          # The config is assembled from the proxy's principal (empty when
+          # unassigned). status and principal_id let an unassigned proxy tell "no
+          # config yet" apart from "config is genuinely empty", and detect a swap.
+          config = current_proxy.sync_config
           render json: {
             config_hash: current_hash,
             status: current_proxy.status,
             principal_id: current_proxy.principal&.oid,
-            secrets: current_proxy.sync_secrets,
-            transforms: current_proxy.sync_transforms,
-            postgres: current_proxy.sync_postgres
+            secrets: config["secrets"],
+            transforms: config["transforms"],
+            postgres: config["postgres"]
           }
         end
       end

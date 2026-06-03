@@ -108,4 +108,75 @@ class PrincipalTest < ActiveSupport::TestCase
     assert_nil proxy.principal
     assert_equal "unassigned", proxy.status
   end
+
+  # --- effective config / grant resolution --------------------------------
+
+  def principal_with_grants(*grantables)
+    principal = principals(:globex_user)
+    grantables.each do |g|
+      key = Grant::GRANTABLE_ASSOCIATIONS.find { |a| g.is_a?(a.to_s.camelize.constantize) }
+      Grant.create!(principal: principal, key => g, created_by: users(:globex_admin))
+    end
+    principal
+  end
+
+  test "sync_transforms emits a gcp_auth transform per granted GcpAuthSecret" do
+    transforms = principal_with_grants(gcp_auth_secrets(:acme_bigquery)).sync_transforms
+    assert_equal 1, transforms.length
+    assert_equal "gcp_auth", transforms.first["name"]
+    assert_equal({ "type" => "workload_identity" }, transforms.first.dig("config", "credentials_provider"))
+  end
+
+  test "sync_transforms bundles all granted oauth tokens into one transform" do
+    transforms = principal_with_grants(oauth_token_secrets(:acme_gmail_oauth)).sync_transforms
+    oauth = transforms.find { |t| t["name"] == "oauth_token" }
+    refute_nil oauth
+    tokens = oauth.dig("config", "tokens")
+    assert_equal 1, tokens.length
+    assert_equal "refresh_token", tokens.first["grant"]
+  end
+
+  test "sync_transforms is empty without transform grants" do
+    assert_empty principals(:globex_user).sync_transforms
+  end
+
+  test "sync_postgres emits a DSN entry per granted PgDsnSecret, keyed by foreign_id" do
+    entries = principal_with_grants(pg_dsn_secrets(:acme_analytics_pg)).sync_postgres
+    assert_equal 1, entries.length
+    assert_equal pg_dsn_secrets(:acme_analytics_pg).foreign_id, entries.first["foreign_id"]
+    assert_equal({ "type" => "env", "var" => "PG_ANALYTICS_DSN" }, entries.first["dsn"])
+  end
+
+  test "sync_postgres is empty without pg_dsn grants" do
+    assert_empty principals(:globex_user).sync_postgres
+  end
+
+  test "granted_static_secrets includes secrets granted via an assigned role" do
+    # acme_channel holds the acme_infra role, which is granted acme_prod_api_key.
+    assert_includes principals(:acme_channel).granted_static_secrets, static_secrets(:acme_prod_api_key)
+  end
+
+  test "effective grants dedupe a secret reachable both directly and via a role" do
+    principal = principals(:acme_channel)
+    # acme_prod_api_key already reaches the principal through the acme_infra role;
+    # also grant it directly and confirm it still appears exactly once.
+    Grant.create!(principal: principal, static_secret: static_secrets(:acme_prod_api_key),
+                  created_by: users(:acme_admin))
+    ids = principal.granted_static_secrets.map(&:id)
+    assert_equal ids.uniq, ids
+    assert_equal 1, ids.count(static_secrets(:acme_prod_api_key).id)
+  end
+
+  test "effective_config redacts inline control_plane values by default but not when asked for live secrets" do
+    principal = principals(:acme_channel)
+    SecretSource.create!(source_type: "control_plane", secret: "s3cr3t",
+                         static_secret: static_secrets(:db_password_replace))
+
+    redacted = principal.effective_config.fetch("secrets").find { |s| s.dig("source", "type") == "control_plane" }
+    assert_equal "[redacted]", redacted.dig("source", "value")
+
+    live = principal.effective_config(redact_secrets: false)
+                    .fetch("secrets").find { |s| s.dig("source", "type") == "control_plane" }
+    assert_equal "s3cr3t", live.dig("source", "value")
+  end
 end

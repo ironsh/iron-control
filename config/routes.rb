@@ -27,6 +27,9 @@ Rails.application.routes.draw do
         collection do
           get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup
         end
+        member do
+          get "effective_config"
+        end
         # Role assignments for a principal. :id is the role's oid.
         resources :roles, only: %i[index create destroy], controller: :principal_roles
       end
