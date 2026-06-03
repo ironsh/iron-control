@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_03_120001) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_03_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -59,7 +59,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_03_120001) do
     t.index ["hmac_secret_id"], name: "index_grants_on_hmac_secret_id"
     t.index ["oauth_token_secret_id"], name: "index_grants_on_oauth_token_secret_id"
     t.index ["pg_dsn_secret_id"], name: "index_grants_on_pg_dsn_secret_id"
+    t.index ["principal_id", "gcp_auth_secret_id"], name: "index_grants_uniq_principal_gcp_auth_secret", unique: true, where: "((principal_id IS NOT NULL) AND (gcp_auth_secret_id IS NOT NULL))"
+    t.index ["principal_id", "hmac_secret_id"], name: "index_grants_uniq_principal_hmac_secret", unique: true, where: "((principal_id IS NOT NULL) AND (hmac_secret_id IS NOT NULL))"
+    t.index ["principal_id", "oauth_token_secret_id"], name: "index_grants_uniq_principal_oauth_token_secret", unique: true, where: "((principal_id IS NOT NULL) AND (oauth_token_secret_id IS NOT NULL))"
+    t.index ["principal_id", "pg_dsn_secret_id"], name: "index_grants_uniq_principal_pg_dsn_secret", unique: true, where: "((principal_id IS NOT NULL) AND (pg_dsn_secret_id IS NOT NULL))"
+    t.index ["principal_id", "static_secret_id"], name: "index_grants_uniq_principal_static_secret", unique: true, where: "((principal_id IS NOT NULL) AND (static_secret_id IS NOT NULL))"
     t.index ["principal_id"], name: "index_grants_on_principal_id"
+    t.index ["role_id", "gcp_auth_secret_id"], name: "index_grants_uniq_role_gcp_auth_secret", unique: true, where: "((role_id IS NOT NULL) AND (gcp_auth_secret_id IS NOT NULL))"
+    t.index ["role_id", "hmac_secret_id"], name: "index_grants_uniq_role_hmac_secret", unique: true, where: "((role_id IS NOT NULL) AND (hmac_secret_id IS NOT NULL))"
+    t.index ["role_id", "oauth_token_secret_id"], name: "index_grants_uniq_role_oauth_token_secret", unique: true, where: "((role_id IS NOT NULL) AND (oauth_token_secret_id IS NOT NULL))"
+    t.index ["role_id", "pg_dsn_secret_id"], name: "index_grants_uniq_role_pg_dsn_secret", unique: true, where: "((role_id IS NOT NULL) AND (pg_dsn_secret_id IS NOT NULL))"
+    t.index ["role_id", "static_secret_id"], name: "index_grants_uniq_role_static_secret", unique: true, where: "((role_id IS NOT NULL) AND (static_secret_id IS NOT NULL))"
     t.index ["role_id"], name: "index_grants_on_role_id"
     t.index ["static_secret_id"], name: "index_grants_on_static_secret_id"
   end

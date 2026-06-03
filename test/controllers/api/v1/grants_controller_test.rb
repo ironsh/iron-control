@@ -121,6 +121,38 @@ module Api
         assert_equal secret_ref.oid, data["static_secret_id"]
       end
 
+      test "POST is idempotent: re-granting the same secret to a role returns the existing grant" do
+        role = roles(:acme_admin_role)
+        secret_ref = static_secrets(:github_token_inject)
+        body = { data: { role_id: role.oid, static_secret_id: secret_ref.oid } }
+
+        post api_v1_grants_url, params: body.to_json, headers: auth_headers
+        assert_response :created
+        first_oid = json_body.dig("data", "id")
+
+        assert_no_difference -> { Grant.count } do
+          post api_v1_grants_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :ok
+        assert_equal first_oid, json_body.dig("data", "id")
+      end
+
+      test "POST is idempotent: re-granting the same secret to a principal returns the existing grant" do
+        principal = principals(:globex_user)
+        secret_ref = static_secrets(:github_token_inject)
+        body = { data: { principal_id: principal.oid, static_secret_id: secret_ref.oid } }
+
+        post api_v1_grants_url, params: body.to_json, headers: auth_headers
+        assert_response :created
+        first_oid = json_body.dig("data", "id")
+
+        assert_no_difference -> { Grant.count } do
+          post api_v1_grants_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :ok
+        assert_equal first_oid, json_body.dig("data", "id")
+      end
+
       test "GET returns a role-granted Grant with its role_id" do
         grant = grants(:acme_infra_prod_api_key)
         get api_v1_grant_url(id: grant.oid), headers: auth_headers

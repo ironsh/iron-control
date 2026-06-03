@@ -28,12 +28,16 @@ module Api
         grantable_key, grantable = resolve_one(attrs, GRANTABLE_TYPES)
         return render_missing(GRANTABLE_TYPES) unless grantable_key
 
-        grant = Grant.create!(
-          assoc(grantee_key) => grantee,
-          assoc(grantable_key) => grantable,
-          created_by: current_user
-        )
-        render status: :created, json: serialize(grant)
+        # Granting the same secret to the same grantee is idempotent: a repeat
+        # returns the existing grant with 200 rather than a duplicate row. A
+        # unique index backs this, so a race that slips past find_or_create_by
+        # raises RecordNotUnique, which we resolve to the now-existing grant.
+        identity = { assoc(grantee_key) => grantee, assoc(grantable_key) => grantable }
+        grant = Grant.create_with(created_by: current_user).find_or_create_by!(identity)
+        render status: (grant.previously_new_record? ? :created : :ok), json: serialize(grant)
+      rescue ActiveRecord::RecordNotUnique
+        grant = Grant.find_by!(identity)
+        render status: :ok, json: serialize(grant)
       rescue ActiveRecord::RecordInvalid => e
         render_validation_error(e.record)
       end
