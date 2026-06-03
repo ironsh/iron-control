@@ -37,55 +37,25 @@ class Proxy < ApplicationRecord
     Digest::SHA256.hexdigest(plaintext)
   end
 
-  # The granted secrets and sync payloads are a function of the assigned
-  # principal's effective grants, so the assembly lives on Principal. An
-  # unassigned proxy carries no authority and resolves to empty collections.
-  def granted_static_secrets
-    principal&.granted_static_secrets || StaticSecret.none
-  end
-
-  def granted_gcp_auth_secrets
-    principal&.granted_gcp_auth_secrets || GcpAuthSecret.none
-  end
-
-  def granted_oauth_token_secrets
-    principal&.granted_oauth_token_secrets || OauthTokenSecret.none
-  end
-
-  def granted_pg_dsn_secrets
-    principal&.granted_pg_dsn_secrets || PgDsnSecret.none
-  end
-
-  # The `secrets` array delivered to iron-proxy; empty when unassigned.
-  def sync_secrets
-    principal&.sync_secrets || []
-  end
-
-  # The `transforms` array delivered to iron-proxy; empty when unassigned.
-  def sync_transforms
-    principal&.sync_transforms || []
-  end
-
-  # The top-level `postgres` array delivered to iron-proxy; empty when
-  # unassigned. The proxy's local listeners bind to these by foreign_id.
-  def sync_postgres
-    principal&.sync_postgres || []
+  # The config this proxy delivers, in the iron-proxy sync shape. The assembly
+  # lives on Principal (it is a function of effective grants); an unassigned
+  # proxy carries no authority and resolves to the empty config. Live secret
+  # values are kept inline here because the proxy needs them to resolve.
+  def sync_config
+    principal&.effective_config(redact_secrets: false) || Principal::EMPTY_CONFIG
   end
 
   # Opaque, deterministic fingerprint of the delivered config. The proxy treats
   # this as an ETag: it echoes its current hash on each sync and only re-applies
   # config when the hash changes.
   def config_hash
-    payload = {
-      # The principal identity and assignment time are folded in so that any
-      # assignment change forces a refresh, even a swap between principals whose
-      # effective secrets happen to be identical (or an unassign to empty).
+    # The principal identity and assignment time are folded in so that any
+    # assignment change forces a refresh, even a swap between principals whose
+    # effective secrets happen to be identical (or an unassign to empty).
+    payload = sync_config.merge(
       "principal" => principal&.oid,
-      "principal_assigned_at" => principal_assigned_at&.utc&.iso8601,
-      "secrets" => sync_secrets,
-      "transforms" => sync_transforms,
-      "postgres" => sync_postgres
-    }
+      "principal_assigned_at" => principal_assigned_at&.utc&.iso8601
+    )
     "sha256:#{Digest::SHA256.hexdigest(self.class.canonical_json(payload))}"
   end
 

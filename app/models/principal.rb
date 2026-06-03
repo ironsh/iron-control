@@ -24,6 +24,10 @@ class Principal < ApplicationRecord
   # reports that a control_plane source carries a value without revealing it.
   REDACTED = "[redacted]".freeze
 
+  # The config of a principal with no effective grants; also what an unassigned
+  # proxy resolves to.
+  EMPTY_CONFIG = { "secrets" => [], "transforms" => [], "postgres" => [] }.freeze
+
   # Every grant this principal resolves to: its own direct grants plus the
   # grants of every role it is assigned. Secrets reachable through more than one
   # path collapse naturally because callers select distinct secret rows.

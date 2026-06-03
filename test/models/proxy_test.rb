@@ -42,9 +42,10 @@ class ProxyTest < ActiveSupport::TestCase
 
   test "an unassigned proxy delivers an empty config" do
     proxy = Proxy.create!(name: "idle", principal: nil)
-    assert_empty proxy.sync_secrets
-    assert_empty proxy.sync_transforms
-    assert_empty proxy.granted_static_secrets
+    config = proxy.sync_config
+    assert_empty config["secrets"]
+    assert_empty config["transforms"]
+    assert_empty config["postgres"]
   end
 
   test "config_hash changes when the principal is swapped" do
@@ -96,52 +97,9 @@ class ProxyTest < ActiveSupport::TestCase
     assert_includes dup.errors[:bearer_token_hash], "has already been taken"
   end
 
-  # --- transform delivery -------------------------------------------------
-
-  def proxy_with_grants(*grantables)
-    proxy = Proxy.create!(name: "transform-proxy", principal: principals(:globex_user))
-    grantables.each do |g|
-      key = Grant::GRANTABLE_ASSOCIATIONS.find { |a| g.is_a?(a.to_s.camelize.constantize) }
-      Grant.create!(principal: proxy.principal, key => g, created_by: users(:globex_admin))
-    end
-    proxy
-  end
-
-  test "sync_transforms emits a gcp_auth transform per granted GcpAuthSecret" do
-    proxy = proxy_with_grants(gcp_auth_secrets(:acme_bigquery))
-    transforms = proxy.sync_transforms
-    assert_equal 1, transforms.length
-    assert_equal "gcp_auth", transforms.first["name"]
-    assert_equal({ "type" => "workload_identity" }, transforms.first.dig("config", "credentials_provider"))
-  end
-
-  test "sync_transforms bundles all granted oauth tokens into one transform" do
-    proxy = proxy_with_grants(oauth_token_secrets(:acme_gmail_oauth))
-    transforms = proxy.sync_transforms
-    oauth = transforms.find { |t| t["name"] == "oauth_token" }
-    refute_nil oauth
-    tokens = oauth.dig("config", "tokens")
-    assert_equal 1, tokens.length
-    assert_equal "refresh_token", tokens.first["grant"]
-  end
-
-  test "sync_transforms is empty without transform grants" do
-    proxy = Proxy.create!(name: "bare", principal: principals(:globex_user))
-    assert_empty proxy.sync_transforms
-  end
-
-  test "sync_postgres emits a DSN entry per granted PgDsnSecret, keyed by foreign_id" do
-    proxy = proxy_with_grants(pg_dsn_secrets(:acme_analytics_pg))
-    entries = proxy.sync_postgres
-    assert_equal 1, entries.length
-    assert_equal pg_dsn_secrets(:acme_analytics_pg).foreign_id, entries.first["foreign_id"]
-    assert_equal({ "type" => "env", "var" => "PG_ANALYTICS_DSN" }, entries.first["dsn"])
-  end
-
-  test "sync_postgres is empty without pg_dsn grants" do
-    proxy = Proxy.create!(name: "bare-pg", principal: principals(:globex_user))
-    assert_empty proxy.sync_postgres
-  end
+  # --- config_hash --------------------------------------------------------
+  # Grant resolution and sync-payload assembly are tested on Principal, which
+  # owns that logic; here we cover only how the proxy's hash reacts to changes.
 
   test "config_hash changes when a pg_dsn grant is added" do
     proxy = Proxy.create!(name: "pg-hashing", principal: principals(:globex_user))
@@ -157,26 +115,6 @@ class ProxyTest < ActiveSupport::TestCase
     Grant.create!(principal: proxy.principal, gcp_auth_secret: gcp_auth_secrets(:acme_bigquery),
                   created_by: users(:globex_admin))
     refute_equal before, proxy.config_hash
-  end
-
-  # --- role-based grants --------------------------------------------------
-
-  test "granted_static_secrets includes secrets granted via an assigned role" do
-    # acme_channel holds the acme_infra role, which is granted acme_prod_api_key.
-    proxy = proxies(:acme_proxy)
-    assert_includes proxy.granted_static_secrets, static_secrets(:acme_prod_api_key)
-  end
-
-  test "effective grants dedupe a secret reachable both directly and via a role" do
-    principal = principals(:acme_channel)
-    proxy = proxies(:acme_proxy)
-    # acme_prod_api_key already reaches the principal through the acme_infra role;
-    # also grant it directly and confirm it still appears exactly once.
-    Grant.create!(principal: principal, static_secret: static_secrets(:acme_prod_api_key),
-                  created_by: users(:acme_admin))
-    ids = proxy.granted_static_secrets.map(&:id)
-    assert_equal ids.uniq, ids
-    assert_equal 1, ids.count(static_secrets(:acme_prod_api_key).id)
   end
 
   test "config_hash changes when a role grant becomes reachable" do
