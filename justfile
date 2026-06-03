@@ -13,15 +13,25 @@ export IRON_CONTROL_INITIAL_API_KEY := "iak_0123456789abcdef0123456789abcdef0123
 default:
     @just --list
 
-# Prepare the database and run the server with dev secrets.
+# Prepare the database, then run the web server + Tailwind CSS watcher under
+# overmind (see Procfile.dev), so console styles rebuild on change.
 dev: deps
     @echo "== Preparing database =="
     bin/rails db:prepare
-    @echo "== Starting server on http://localhost:3000 =="
-    @echo "   user:    $IRON_CONTROL_INITIAL_USER_EMAIL"
-    @echo "   password:$IRON_CONTROL_INITIAL_USER_PASSWORD"
-    @echo "   api key: $IRON_CONTROL_INITIAL_API_KEY"
+    @echo "== Starting overmind (web + css watch) on http://localhost:3000 =="
+    @echo "   console:  http://localhost:3000/console/principals"
+    @echo "   user:     $IRON_CONTROL_INITIAL_USER_EMAIL"
+    @echo "   password: $IRON_CONTROL_INITIAL_USER_PASSWORD"
+    @echo "   api key:  $IRON_CONTROL_INITIAL_API_KEY"
     bin/dev
+
+# Build the Tailwind CSS bundle once (app/assets/builds/tailwind.css).
+css:
+    bin/rails tailwindcss:build
+
+# Watch and rebuild the Tailwind CSS bundle on change.
+css-watch:
+    bin/rails tailwindcss:watch
 
 # Install gem dependencies if needed.
 deps:

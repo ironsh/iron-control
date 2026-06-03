@@ -9,8 +9,11 @@ Rails.application.routes.draw do
   # get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
 
-  # Defines the root path route ("/")
-  # root "posts#index"
+  # Operator console (server-rendered HTML UI).
+  root "console#principals"
+  get "console/principals", to: "console#principals", as: :console_principals
+  get "console/principals/:id", to: "console#principal", as: :console_principal
+  get "console/secrets", to: "console#secrets", as: :console_secrets
 
   namespace :api do
     namespace :v1 do

@@ -4,6 +4,9 @@ source "https://rubygems.org"
 gem "rails", "~> 8.1.3"
 # The modern asset pipeline for Rails [https://github.com/rails/propshaft]
 gem "propshaft"
+# Tailwind CSS, compiled by a standalone binary into app/assets/builds.
+# Pinned to the v3 line so the console views' utility classes stay stable.
+gem "tailwindcss-rails", "~> 2.7"
 # Use pg as the database for Active Record
 gem "pg", "~> 1.5"
 # Opaque ID encoding (bigint <-> short string) for externally-exposed IDs
