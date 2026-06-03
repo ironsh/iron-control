@@ -12,6 +12,7 @@
 - [GCP auth secrets](#gcp-auth-secrets)
 - [OAuth token secrets](#oauth-token-secrets)
 - [PG DSN secrets](#pg-dsn-secrets)
+- [HMAC secrets](#hmac-secrets)
 - [Principals](#principals)
 - [Roles](#roles)
 - [Grants](#grants)
@@ -451,6 +452,7 @@ Listener and client knobs (bind address, client auth) are deliberately not model
 | `name`        | optional    | |
 | `description` | optional    | |
 | `labels`      | optional    | Object; defaults to `{}`. |
+| `database`    | optional    | Upstream database name to connect to, overriding the one in the DSN. |
 | `role`        | optional    | Upstream `SET ROLE` applied to the session. |
 | `dsn`         | required    | A [secret source](#secret-sources) resolving to the connection string. Replaced wholesale on update. |
 
@@ -466,6 +468,7 @@ Listener and client knobs (bind address, client auth) are deliberately not model
     "name": "Analytics DB",
     "description": "Read-only reporting",
     "labels": { "team": "data" },
+    "database": "analytics",
     "role": "readonly",
     "dsn": { "source_type": "env", "config": { "var": "PG_ANALYTICS_DSN" } }
   }
@@ -483,6 +486,7 @@ Returns `201` with the created resource. Response shape:
     "name": "Analytics DB",
     "description": "Read-only reporting",
     "labels": { "team": "data" },
+    "database": "analytics",
     "role": "readonly",
     "dsn": { "source_type": "env", "config": { "var": "PG_ANALYTICS_DSN" } },
     "created_at": "2026-06-01T10:00:00Z",
@@ -501,6 +505,97 @@ The `dsn` in responses never includes a `control_plane` `secret` value.
 | `GET`  | `/api/v1/pg_dsn_secrets/:id` | Fetch one. `404` if missing. |
 | `GET`  | `/api/v1/pg_dsn_secrets/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
 | `PUT`/`PATCH` | `/api/v1/pg_dsn_secrets/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`; same body as create. `dsn` is replaced wholesale. |
+
+## HMAC secrets
+
+An HMAC secret signs matching outbound requests with an HMAC over a templated message and injects the signature (and any companion values) as request headers. The HMAC key is one [secret source](#secret-sources) under the required `secret` credential; additional named credentials are optional and available to the message and header templates as `.Credentials.<name>`. At least one [rule](#request-rules) is required.
+
+Each granted HMAC secret is delivered to `iron-proxy` as its own `hmac_sign` transform with its own rules (like a [GCP auth secret](#gcp-auth-secrets), and unlike OAuth token secrets, which are bundled).
+
+### Attributes
+
+| Field                       | In requests | Notes |
+| --------------------------- | ----------- | ----- |
+| `namespace`                 | optional    | Defaults to `"default"`. Immutable. |
+| `foreign_id`                | optional    | Unique per namespace. Immutable. |
+| `name`, `description`       | optional    | |
+| `labels`                    | optional    | Object; defaults to `{}`. |
+| `timestamp_format`          | required    | One of `unix_seconds`, `unix_millis`, `unix_nanos`, `rfc3339`. |
+| `signature_algorithm`       | required    | One of `sha256`, `sha512`, `sha1`. |
+| `signature_key_encoding`    | required    | How the key bytes are encoded: one of `raw`, `base64`, `hex`. |
+| `signature_output_encoding` | required    | How the signature is encoded: one of `base64`, `hex`. |
+| `signature_message`         | required    | Template for the signed message. Has access to `.Timestamp`, `.Body`, `.Credentials.<name>`, etc. |
+| `allow_chunked_body`        | optional    | Defaults to `false`. Allow signing requests with a chunked body. |
+| `headers`                   | required    | Non-empty array of `{ "name", "value" }` injected headers; values are templates (e.g. `{{ .Signature }}`). |
+| `credentials`               | required    | Object mapping credential name → [secret source](#secret-sources). Must include `secret` (the HMAC key); other names are optional. |
+| `rules`                     | required    | At least one [rule](#request-rules). |
+
+### Create
+
+`POST /api/v1/hmac_secrets`
+
+```json
+{
+  "data": {
+    "namespace": "default",
+    "foreign_id": "webhook-hmac",
+    "name": "Webhook Signing",
+    "timestamp_format": "unix_seconds",
+    "signature_algorithm": "sha256",
+    "signature_key_encoding": "hex",
+    "signature_output_encoding": "base64",
+    "signature_message": "{{ .Timestamp }}.{{ .Body }}",
+    "headers": [
+      { "name": "X-Signature", "value": "{{ .Signature }}" },
+      { "name": "X-Timestamp", "value": "{{ .Timestamp }}" }
+    ],
+    "credentials": {
+      "secret": { "source_type": "aws_sm", "config": { "secret_id": "webhook-hmac-key", "region": "us-west-2" } }
+    },
+    "rules": [ { "host": "hooks.example.com", "http_methods": ["POST"], "paths": ["/webhooks/*"] } ]
+  }
+}
+```
+
+Returns `201`. Response shape (note that `credentials` echoes each source as `{ source_type, config }`, never the underlying `secret`):
+
+```json
+{
+  "data": {
+    "id": "hms_...",
+    "namespace": "default",
+    "foreign_id": "webhook-hmac",
+    "name": "Webhook Signing",
+    "description": null,
+    "labels": {},
+    "timestamp_format": "unix_seconds",
+    "signature_algorithm": "sha256",
+    "signature_key_encoding": "hex",
+    "signature_output_encoding": "base64",
+    "signature_message": "{{ .Timestamp }}.{{ .Body }}",
+    "allow_chunked_body": false,
+    "headers": [
+      { "name": "X-Signature", "value": "{{ .Signature }}" },
+      { "name": "X-Timestamp", "value": "{{ .Timestamp }}" }
+    ],
+    "credentials": {
+      "secret": { "source_type": "aws_sm", "config": { "secret_id": "webhook-hmac-key", "region": "us-west-2" } }
+    },
+    "rules": [ { "host": "hooks.example.com", "cidr": null, "position": 0, "http_methods": ["POST"], "paths": ["/webhooks/*"] } ],
+    "created_at": "2026-06-01T10:00:00Z",
+    "updated_at": "2026-06-01T10:00:00Z"
+  }
+}
+```
+
+### Other operations
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| `GET`  | `/api/v1/hmac_secrets?namespace=default` | List. |
+| `GET`  | `/api/v1/hmac_secrets/:id` | Fetch one. |
+| `GET`  | `/api/v1/hmac_secrets/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
+| `PUT`/`PATCH` | `/api/v1/hmac_secrets/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`; same body as create. |
 
 ## Principals
 
@@ -662,7 +757,7 @@ A grant attaches exactly one secret to a **grantee** — either a principal or a
 
 ### Create
 
-`POST /api/v1/grants` — supply exactly one grantee (`principal_id` **or** `role_id`) plus exactly one of `static_secret_id`, `gcp_auth_secret_id`, or `oauth_token_secret_id`:
+`POST /api/v1/grants` — supply exactly one grantee (`principal_id` **or** `role_id`) plus exactly one of `static_secret_id`, `gcp_auth_secret_id`, `oauth_token_secret_id`, `pg_dsn_secret_id`, or `hmac_secret_id`:
 
 ```json
 { "data": { "principal_id": "prn_...", "static_secret_id": "ssr_..." } }
@@ -688,7 +783,7 @@ Returns `201`. The response includes the one grantee key and the one secret-type
 }
 ```
 
-Referencing a missing grantee or secret returns `404`. Supplying no grantee returns `422` with `"must reference one of principal_id, role_id"`; supplying no secret returns `422` with `"must reference one of static_secret_id, gcp_auth_secret_id, oauth_token_secret_id"`.
+Referencing a missing grantee or secret returns `404`. Supplying no grantee returns `422` with `"must reference one of principal_id, role_id"`; supplying no secret returns `422` with `"must reference one of static_secret_id, gcp_auth_secret_id, oauth_token_secret_id, pg_dsn_secret_id, hmac_secret_id"`.
 
 ### List by grantee
 
@@ -867,6 +962,24 @@ Response when the hash differs (full payload):
       }
     },
     {
+      "name": "hmac_sign",
+      "config": {
+        "credentials": { "secret": { "type": "aws_sm", "secret_id": "webhook-hmac-key", "region": "us-west-2" } },
+        "timestamp": { "format": "unix_seconds" },
+        "signature": {
+          "algorithm": "sha256",
+          "key_encoding": "hex",
+          "output_encoding": "base64",
+          "message": "{{ .Timestamp }}.{{ .Body }}"
+        },
+        "headers": [
+          { "name": "X-Signature", "value": "{{ .Signature }}" },
+          { "name": "X-Timestamp", "value": "{{ .Timestamp }}" }
+        ],
+        "rules": [ { "host": "hooks.example.com", "methods": ["POST"], "paths": ["/webhooks/*"] } ]
+      }
+    },
+    {
       "name": "oauth_token",
       "config": {
         "tokens": [
@@ -883,6 +996,15 @@ Response when the hash differs (full payload):
         ]
       }
     }
+  ],
+  "postgres": [
+    {
+      "id": "pgs_...",
+      "foreign_id": "analytics-pg",
+      "dsn": { "type": "env", "var": "PG_ANALYTICS_DSN" },
+      "database": "analytics",
+      "role": "readonly"
+    }
   ]
 }
 ```
@@ -892,7 +1014,8 @@ Notes on the proxy-sync payload, which differs from the REST representation:
 - `status` is `assigned` or `unassigned`, and `principal_id` is the assigned principal (or `null`). An unassigned proxy gets a valid response with `status: "unassigned"` and empty `secrets`/`transforms`, which is distinct from an assigned proxy whose config is genuinely empty. These fields appear only in the full payload (not the hash-only response).
 - The config hash incorporates the principal assignment, so assigning, swapping, or clearing the principal always changes the hash and the proxy refetches. A swap is a full replacement: the proxy should drop the previously delivered config rather than merge.
 - The delivered config covers the proxy's principal's **effective grants**: secrets granted to the principal directly plus those granted to any [role](#roles) it holds. A secret reachable through more than one path appears once.
-- `secrets` carries one entry per granted static secret that has a source (sourceless static secrets are skipped). `transforms` carries one `gcp_auth` transform per granted GCP auth secret and a single bundled `oauth_token` transform whose `config.tokens` lists every granted OAuth token secret.
+- `secrets` carries one entry per granted static secret that has a source (sourceless static secrets are skipped). `transforms` carries one `gcp_auth` transform per granted GCP auth secret, one `hmac_sign` transform per granted HMAC secret, and a single bundled `oauth_token` transform whose `config.tokens` lists every granted OAuth token secret. An `hmac_sign` transform omits `allow_chunked_body` when it is `false`.
+- `postgres` carries one entry per granted PG DSN secret, keyed by `foreign_id` (the key a proxy-local listener binds to), with the opaque `id` alongside it. `database` and `role` are omitted when blank.
 - Each source is flattened: its `config` keys are merged up and tagged with `type` (the `source_type`). A `control_plane` source delivers its decrypted value inline as `value`.
 - Rules use `methods` here, versus `http_methods` in the REST API. Blank rule fields are omitted.
 - The top-level `rules`, `mcp`, and `ingest_token` fields the proxy also understands are intentionally omitted; iron-control has no models for them. Rules are carried per secret instead.
