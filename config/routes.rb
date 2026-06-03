@@ -25,6 +25,8 @@ Rails.application.routes.draw do
         collection do
           get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup
         end
+        # Grants whose grantee is this role. :role_id is the role's oid.
+        resources :grants, only: %i[index], controller: :grantee_grants
       end
       resources :principals, only: %i[index show create update] do
         collection do
@@ -35,6 +37,8 @@ Rails.application.routes.draw do
         end
         # Role assignments for a principal. :id is the role's oid.
         resources :roles, only: %i[index create destroy], controller: :principal_roles
+        # Grants whose grantee is this principal. :principal_id is the principal's oid.
+        resources :grants, only: %i[index], controller: :grantee_grants
       end
       resources :grants, only: %i[show create destroy]
       resources :api_keys, only: %i[index show create destroy]
