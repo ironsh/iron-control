@@ -9,6 +9,11 @@ Rails.application.routes.draw do
   # get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
 
+  # Operator console session login (cookie-based, separate from the API key auth).
+  get "login", to: "sessions#new", as: :login
+  post "login", to: "sessions#create"
+  delete "logout", to: "sessions#destroy", as: :logout
+
   # Operator console (server-rendered HTML UI).
   root "console#principals"
   get "console/principals", to: "console#principals", as: :console_principals

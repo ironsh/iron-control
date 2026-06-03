@@ -4,6 +4,8 @@
 class ConsoleController < ApplicationController
   layout "console"
 
+  before_action :require_login
+
   # The four grantable secret kinds, keyed by a short slug used in the UI. The
   # `includes` association is eager-loaded so the source/injection columns don't
   # trigger a query per row.
