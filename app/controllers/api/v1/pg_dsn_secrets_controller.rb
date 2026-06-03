@@ -39,7 +39,7 @@ module Api
 
       def assign_and_save!(ref, attrs)
         base = attrs.permit(
-          :namespace, :foreign_id, :name, :description, :role, labels: {}
+          :namespace, :foreign_id, :name, :description, :database, :role, labels: {}
         )
         # A PUT upsert by foreign_id sets identity on the record before
         # assignment; a blank body value must not wipe it.
@@ -70,6 +70,7 @@ module Api
           name: ref.name,
           description: ref.description,
           labels: ref.labels,
+          database: ref.database,
           role: ref.role,
           dsn: ref.dsn_source && {
             source_type: ref.dsn_source.source_type,

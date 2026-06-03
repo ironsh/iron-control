@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_02_060002) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_03_044111) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -85,6 +85,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_02_060002) do
   create_table "pg_dsn_secrets", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.bigint "created_by_id", null: false
+    t.string "database"
     t.string "description"
     t.string "foreign_id"
     t.jsonb "labels", default: {}, null: false

@@ -25,6 +25,7 @@ module Api
 
         data = json_body.fetch("data")
         assert_equal secret.oid, data["id"]
+        assert_equal "analytics", data["database"]
         assert_equal "readonly", data["role"]
         assert_equal({ "source_type" => "env", "config" => { "var" => "PG_ANALYTICS_DSN" } }, data["dsn"])
         # Listener/client config is a proxy-host concern and is not modeled here.
@@ -59,6 +60,7 @@ module Api
             namespace: "acme",
             foreign_id: "new-pg",
             name: "orders",
+            database: "orders",
             role: "app",
             dsn: { source_type: "aws_sm", config: { secret_id: "arn:db-dsn" } }
           }
@@ -71,6 +73,7 @@ module Api
 
         secret = PgDsnSecret.find_by_oid(json_body.dig("data", "id"))
         assert_equal "aws_sm", secret.dsn_source.source_type
+        assert_equal "orders", secret.database
         assert_equal "app", secret.role
       end
 
