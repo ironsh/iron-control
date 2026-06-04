@@ -77,10 +77,12 @@ class Principal < ApplicationRecord
 
   # The `secrets` array delivered to iron-proxy. Each entry maps to the proxy's
   # `secrets` transform `secretEntry` shape. Secrets without a source are skipped
-  # because the proxy requires a source to resolve a value.
+  # because the proxy requires a source to resolve a value; a brokered source whose
+  # credential has no current access token (bootstrapping or dead) is skipped too,
+  # so the proxy never receives an empty inline value.
   def sync_secrets
     granted_static_secrets.filter_map do |ss|
-      next unless ss.source
+      next unless ss.source&.deliverable?
       ss.to_proxy_secret
     end
   end

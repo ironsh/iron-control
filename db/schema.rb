@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_03_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_04_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -24,6 +24,38 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_03_130000) do
     t.index ["deleted_at"], name: "index_api_keys_on_deleted_at"
     t.index ["token_hash"], name: "index_api_keys_on_token_hash", unique: true
     t.index ["user_id"], name: "index_api_keys_on_user_id"
+  end
+
+  create_table "broker_credentials", force: :cascade do |t|
+    t.text "access_token"
+    t.string "client_id"
+    t.text "client_secret"
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id", null: false
+    t.boolean "dead", default: false, null: false
+    t.string "dead_reason"
+    t.string "description"
+    t.float "early_refresh_fraction", default: 0.2, null: false
+    t.integer "early_refresh_slack_seconds", default: 300, null: false
+    t.datetime "expires_at"
+    t.integer "failure_count", default: 0, null: false
+    t.string "foreign_id"
+    t.jsonb "labels", default: {}, null: false
+    t.datetime "last_refresh"
+    t.integer "max_refresh_interval_seconds", default: 86400, null: false
+    t.string "name"
+    t.string "namespace", default: "default", null: false
+    t.datetime "next_attempt_at"
+    t.integer "refresh_timeout_seconds", default: 30, null: false
+    t.text "refresh_token"
+    t.jsonb "scopes", default: [], null: false
+    t.string "token_endpoint", null: false
+    t.text "token_endpoint_headers"
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_broker_credentials_on_created_by_id"
+    t.index ["labels"], name: "index_broker_credentials_on_labels", using: :gin
+    t.index ["namespace", "foreign_id"], name: "index_broker_credentials_on_namespace_and_foreign_id", unique: true
+    t.index ["next_attempt_at"], name: "index_broker_credentials_on_next_attempt_at"
   end
 
   create_table "gcp_auth_secrets", force: :cascade do |t|
@@ -245,6 +277,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_03_130000) do
   end
 
   add_foreign_key "api_keys", "users"
+  add_foreign_key "broker_credentials", "users", column: "created_by_id"
   add_foreign_key "gcp_auth_secrets", "users", column: "created_by_id"
   add_foreign_key "grants", "gcp_auth_secrets"
   add_foreign_key "grants", "hmac_secrets"
