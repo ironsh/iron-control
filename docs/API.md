@@ -13,6 +13,7 @@
 - [OAuth token secrets](#oauth-token-secrets)
 - [PG DSN secrets](#pg-dsn-secrets)
 - [HMAC secrets](#hmac-secrets)
+- [Broker credentials](#broker-credentials)
 - [Principals](#principals)
 - [Roles](#roles)
 - [Grants](#grants)
@@ -98,7 +99,7 @@ Errors return an `error` object with a `message` and, for validation failures, a
 
 ### Secret sources
 
-A secret source describes where a credential value is resolved from. It appears as the `source` of a static secret, the `keyfile` of a GCP auth secret, and each entry in an OAuth token secret's `credentials` and `token_endpoint_headers` maps.
+A secret source describes where a credential value is resolved from. It appears as the `source` of a static secret, the `keyfile` of a GCP auth secret, each entry in an OAuth token secret's `credentials` and `token_endpoint_headers` maps, and each entry in a broker credential's `credentials` and `token_endpoint_headers` maps.
 
 Shape:
 
@@ -119,7 +120,7 @@ Shape:
 | `1password`           | `secret_ref`           | `token_env`                 | 1Password CLI / service account. |
 | `1password_connect`   | `secret_ref`           | `host_env`, `token_env`     | 1Password Connect server. |
 | `control_plane`       | — (no config keys)     | —                           | Value is supplied inline; see below. |
-| `token_broker`        | `credential_id`        | `failure_ttl`               | External token broker. |
+| `token_broker`        | `credential_id`        | —                           | A managed [broker credential](#broker-credentials); see below. |
 
 `control_plane` is special: the value is stored in iron-control itself. Supply it as a top-level `secret` field on the source (not inside `config`), and leave `config` empty:
 
@@ -132,6 +133,8 @@ Shape:
 ```
 
 The `secret` field is encrypted at rest, is write-only, and is never returned in any response. It is only permitted for `control_plane` sources; supplying it for any other type is a validation error, and omitting it for `control_plane` is also an error.
+
+`token_broker` is also resolved by iron-control rather than by the proxy. `credential_id` names a [broker credential](#broker-credentials), and at sync time iron-control substitutes that credential's current access token, delivered inline exactly like a `control_plane` value. The `credential_id` itself never reaches the proxy. If the credential has no current token (it is still bootstrapping, or it is dead), the owning secret is omitted from the proxy's config until the credential recovers.
 
 ### Request rules
 
@@ -601,6 +604,133 @@ Returns `201`. Response shape (note that `credentials` echoes each source as `{ 
 | `GET`  | `/api/v1/hmac_secrets/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
 | `PUT`/`PATCH` | `/api/v1/hmac_secrets/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`; same body as create. |
 | `DELETE` | `/api/v1/hmac_secrets/:id` | Delete. Returns `204`; `404` if missing. Cascades: the secret's sources, rules, and any grants that reference it are removed. The granted roles and principals are not deleted. |
+
+## Broker credentials
+
+A broker credential is an OAuth credential whose refresh-token lifecycle iron-control manages itself. iron-control runs the refresh loop, mints fresh access tokens before they expire, and delivers the current access token to `iron-proxy` inline through [proxy sync](#proxy-sync) wherever a [`token_broker` secret source](#secret-sources) references the credential by its `id`.
+
+Unlike the secret types above, a broker credential is not granted directly and is not injected on its own. It is referenced by a `token_broker` source on a grantable secret (typically a [static secret](#static-secrets)), which carries the rules and injection config. The `refresh_token` never leaves iron-control.
+
+Each input field (`client_id`, an optional `client_secret`, and any token-endpoint headers) is its own [secret source](#secret-sources). Because the refresh runs inside iron-control, these sources must be resolvable by the control plane: only the `control_plane` and `env` source types are allowed.
+
+### Attributes
+
+| Field                          | In requests | Notes |
+| ------------------------------ | ----------- | ----- |
+| `namespace`                    | optional    | Defaults to `"default"`. Immutable. |
+| `foreign_id`                   | optional    | Unique per namespace. Immutable. |
+| `name`, `description`          | optional    | |
+| `labels`                       | optional    | |
+| `token_endpoint`               | required    | OAuth token endpoint the refresh request is sent to. |
+| `scopes`                       | optional    | Array of strings. |
+| `refresh_token`                | optional    | Write-only seed. Supplying a value (re)bootstraps the credential: it is scheduled to refresh immediately and any dead state is cleared. Never returned. |
+| `credentials`                  | required    | Object mapping field → [secret source](#secret-sources). `client_id` is required; `client_secret` is optional. Sources must be `control_plane` or `env`. |
+| `token_endpoint_headers`       | optional    | Object mapping header name → [secret source](#secret-sources). Sent on the refresh request. |
+| `early_refresh_slack_seconds`  | optional    | Refresh this many seconds before expiry. Defaults to `300`. |
+| `early_refresh_fraction`       | optional    | Refresh once this fraction of the token's lifetime remains, when that is larger than the slack. In `[0, 1)`. Defaults to `0.2`. |
+| `max_refresh_interval_seconds` | optional    | Refresh at least this often, even for long-lived tokens. Defaults to `86400`. |
+| `refresh_timeout_seconds`      | optional    | Per-attempt timeout for the token endpoint request. Defaults to `30`. |
+
+Read-only status fields are returned but never accepted in requests:
+
+| Field             | Notes |
+| ----------------- | ----- |
+| `status`          | `bootstrapping` (no token minted yet), `live`, or `dead` (an unrecoverable refresh failure; needs a new `refresh_token`). |
+| `expires_at`      | When the current access token expires. |
+| `last_refresh`    | When the last successful refresh completed. |
+| `next_attempt_at` | When the next refresh is scheduled. |
+| `dead`            | Whether the credential is dead. |
+| `dead_reason`     | Why it is dead (e.g. `invalid_grant`). |
+| `failure_count`   | Consecutive retryable failures since the last success. |
+
+The minted `access_token` and the `refresh_token` are never returned in any response.
+
+### Create
+
+`POST /api/v1/broker_credentials`
+
+```json
+{
+  "data": {
+    "namespace": "default",
+    "foreign_id": "gmail",
+    "name": "Gmail",
+    "token_endpoint": "https://oauth2.googleapis.com/token",
+    "scopes": ["https://www.googleapis.com/auth/gmail.readonly"],
+    "refresh_token": "1//0g...",
+    "credentials": {
+      "client_id": { "source_type": "control_plane", "secret": "1234.apps.googleusercontent.com", "config": {} },
+      "client_secret": { "source_type": "control_plane", "secret": "GOCSPX-...", "config": {} }
+    }
+  }
+}
+```
+
+Returns `201`. The token blob and the `refresh_token` seed are never echoed back:
+
+```json
+{
+  "data": {
+    "id": "bcr_...",
+    "namespace": "default",
+    "foreign_id": "gmail",
+    "name": "Gmail",
+    "description": null,
+    "labels": {},
+    "token_endpoint": "https://oauth2.googleapis.com/token",
+    "scopes": ["https://www.googleapis.com/auth/gmail.readonly"],
+    "early_refresh_slack_seconds": 300,
+    "early_refresh_fraction": 0.2,
+    "max_refresh_interval_seconds": 86400,
+    "refresh_timeout_seconds": 30,
+    "credentials": {
+      "client_id": { "source_type": "control_plane", "config": {} },
+      "client_secret": { "source_type": "control_plane", "config": {} }
+    },
+    "token_endpoint_headers": {},
+    "status": "bootstrapping",
+    "expires_at": null,
+    "last_refresh": null,
+    "next_attempt_at": "2026-06-01T10:00:00Z",
+    "dead": false,
+    "dead_reason": null,
+    "failure_count": 0,
+    "created_at": "2026-06-01T10:00:00Z",
+    "updated_at": "2026-06-01T10:00:00Z"
+  }
+}
+```
+
+To put the credential to use, reference it from a grantable secret's `token_broker` source, then grant that secret to a principal:
+
+```json
+{
+  "data": {
+    "foreign_id": "gmail-auth",
+    "inject_config": { "header": "Authorization", "formatter": "Bearer {{ .Value }}" },
+    "source": { "source_type": "token_broker", "config": { "credential_id": "bcr_..." } },
+    "rules": [ { "host": "gmail.googleapis.com" } ]
+  }
+}
+```
+
+### Re-authenticating a dead credential
+
+When a refresh fails unrecoverably (for example the IdP returns `invalid_grant` because the refresh token was revoked), the credential's `status` becomes `dead` and it stops minting tokens. Supply a fresh `refresh_token` via `PUT` / `PATCH` to clear the dead state and reschedule it:
+
+```json
+{ "data": { "refresh_token": "1//0gNEW..." } }
+```
+
+### Other operations
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| `GET`  | `/api/v1/broker_credentials?namespace=default` | List. `namespace` required; `labels[k]=v` and pagination optional. |
+| `GET`  | `/api/v1/broker_credentials/:id` | Fetch one. `404` if missing. |
+| `GET`  | `/api/v1/broker_credentials/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
+| `PUT`/`PATCH` | `/api/v1/broker_credentials/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`. A `refresh_token` reseeds and clears dead state; omitting `credentials` preserves the existing input sources. |
+| `DELETE` | `/api/v1/broker_credentials/:id` | Delete. Returns `204`; `404` if missing. Cascades to the credential's input sources. |
 
 ## Principals
 
