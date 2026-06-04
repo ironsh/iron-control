@@ -41,6 +41,8 @@ module Api
         ref = BrokerCredential.find_by_oid!(params[:id])
         ref.destroy!
         head :no_content
+      rescue ActiveRecord::RecordNotDestroyed
+        render status: :conflict, json: { error: { message: ref.errors.full_messages.to_sentence } }
       end
 
       private

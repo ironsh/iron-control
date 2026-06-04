@@ -170,4 +170,21 @@ class BrokerCredentialTest < ActiveSupport::TestCase
     refute_includes ids, future.id
     refute_includes ids, dead.id
   end
+
+  # --- delete guard ---------------------------------------------------------
+
+  test "cannot be destroyed while a token_broker source references it" do
+    cred = create_credential
+    SecretSource.create!(source_type: "token_broker", config: { "credential_id" => cred.oid })
+    refute cred.destroy
+    assert(cred.errors[:base].any? { |m| m.include?("referenced by") })
+    assert BrokerCredential.exists?(cred.id)
+  end
+
+  test "can be destroyed once the references are removed" do
+    cred = create_credential
+    source = SecretSource.create!(source_type: "token_broker", config: { "credential_id" => cred.oid })
+    source.destroy!
+    assert cred.destroy
+  end
 end

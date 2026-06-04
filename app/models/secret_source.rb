@@ -62,6 +62,19 @@ class SecretSource < ApplicationRecord
     true
   end
 
+  # token_broker sources that reference the given broker credential, by its oid or
+  # by (namespace, foreign_id). Used to block deleting a credential still in use.
+  def self.referencing_broker_credential(credential)
+    scope = where(source_type: "token_broker")
+    return scope.where("config->>'credential_id' = ?", credential.oid) if credential.foreign_id.blank?
+
+    scope.where(
+      "config->>'credential_id' = :oid OR " \
+      "(config->>'credential_id' = :fid AND config->>'credential_namespace' = :ns)",
+      oid: credential.oid, fid: credential.foreign_id, ns: credential.namespace
+    )
+  end
+
   OWNER_ASSOCIATIONS = %i[static_secret gcp_auth_secret oauth_token_secret pg_dsn_secret hmac_secret].freeze
 
   # Owners whose sources fill a named role (credential field or endpoint header).

@@ -737,7 +737,7 @@ When a refresh fails unrecoverably (for example the IdP returns `invalid_grant` 
 | `GET`  | `/api/v1/broker_credentials/:id` | Fetch one. `404` if missing. |
 | `GET`  | `/api/v1/broker_credentials/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
 | `PUT`/`PATCH` | `/api/v1/broker_credentials/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`. A `refresh_token` reseeds and clears dead state. Omitted fields are preserved; `client_secret` and `token_endpoint_headers` are only changed when supplied. |
-| `DELETE` | `/api/v1/broker_credentials/:id` | Delete. Returns `204`; `404` if missing. |
+| `DELETE` | `/api/v1/broker_credentials/:id` | Delete. Returns `204`; `404` if missing. Returns `409` if any `token_broker` secret source still references the credential (remove those references first). |
 
 ## Principals
 

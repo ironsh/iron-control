@@ -99,9 +99,20 @@ module Api
       test "destroy removes the credential" do
         bc = broker_credentials(:globex_managed_api)
         assert_difference -> { BrokerCredential.count } => -1 do
-          delete api_v1_broker_credential_url(id: bc.oid), headers: auth_headers(token = "iak_globex-ci-token")
+          delete api_v1_broker_credential_url(id: bc.oid), headers: auth_headers("iak_globex-ci-token")
         end
         assert_response :no_content
+      end
+
+      test "destroy is blocked with 409 while a token_broker source references it" do
+        bc = broker_credentials(:globex_managed_api)
+        SecretSource.create!(source_type: "token_broker",
+                             config: { "credential_id" => bc.foreign_id, "credential_namespace" => bc.namespace })
+        assert_no_difference -> { BrokerCredential.count } do
+          delete api_v1_broker_credential_url(id: bc.oid), headers: auth_headers("iak_globex-ci-token")
+        end
+        assert_response :conflict
+        assert_match "referenced by", json_body.dig("error", "message")
       end
     end
   end

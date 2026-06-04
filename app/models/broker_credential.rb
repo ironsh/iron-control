@@ -36,6 +36,11 @@ class BrokerCredential < ApplicationRecord
 
   attr_writer :refresh_client
 
+  # Refuse to delete a credential that token_broker sources still reference: there
+  # is no FK to cascade or nullify, so deletion would silently leave those secrets
+  # undeliverable. The operator must remove the references first.
+  before_destroy :ensure_not_referenced
+
   serialize :token_endpoint_headers, coder: JSON
   encrypts :access_token
   encrypts :refresh_token
@@ -164,6 +169,12 @@ class BrokerCredential < ApplicationRecord
   def backoff_delay(attempt)
     exp = BACKOFF_BASE_SECONDS * (2**[ attempt - 1, 6 ].min)
     [ exp, BACKOFF_MAX_SECONDS ].min
+  end
+
+  def ensure_not_referenced
+    return unless SecretSource.referencing_broker_credential(self).exists?
+    errors.add(:base, "is referenced by one or more token_broker secret sources; remove those references first")
+    throw :abort
   end
 
   def labels_is_a_hash
