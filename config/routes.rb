@@ -14,6 +14,7 @@ Rails.application.routes.draw do
   get "console/principals", to: "console#principals", as: :console_principals
   get "console/principals/:id", to: "console#principal", as: :console_principal
   get "console/secrets", to: "console#secrets", as: :console_secrets
+  get "console/credentials", to: "console#credentials", as: :console_credentials
 
   namespace :api do
     namespace :v1 do
@@ -59,8 +60,16 @@ Rails.application.routes.draw do
       resources :api_keys, only: %i[index show create destroy]
       resources :proxies, only: %i[index show create update destroy]
 
+      # Operator-managed broker credentials (ApiKey auth). CRUD + lookup; the
+      # rotating token blob is never serialized back.
+      resources :broker_credentials, only: %i[index show create update destroy] do
+        collection { get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup }
+      end
+
       # Called by iron-proxy instances (proxy bearer auth, not ApiKey auth).
       post "proxy/sync", to: "proxy_sync#create"
+      # Vends a managed credential's current access token to iron-proxy.
+      get "credentials/:id/access_token", to: "credentials#access_token"
     end
   end
 

@@ -48,6 +48,13 @@ class ConsoleController < ApplicationController
     end
   end
 
+  # Managed broker credentials and their refresh-loop status. Distinct from
+  # SECRET_KINDS because a broker credential is not grantable -- it is referenced
+  # by a token_broker source rather than granted directly.
+  def credentials
+    @credentials = BrokerCredential.includes(:sources).order(created_at: :asc, id: :asc)
+  end
+
   helper_method :secret_kind_label
   def secret_kind_label(slug)
     SECRET_KINDS.dig(slug, :label) || slug
