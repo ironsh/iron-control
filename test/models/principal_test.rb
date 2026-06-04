@@ -120,6 +120,34 @@ class PrincipalTest < ActiveSupport::TestCase
     principal
   end
 
+  test "sync_secrets delivers a brokered token inline and omits it until minted" do
+    cred = BrokerCredential.new(namespace: "default", foreign_id: "sync-#{SecureRandom.hex(4)}",
+                                token_endpoint: "https://idp.example/token",
+                                created_by: users(:globex_admin), refresh_token: "seed")
+    cred.sources.build(source_type: "control_plane", secret: "cid", role: "client_id", role_kind: "credential_field")
+    cred.save!
+
+    secret = StaticSecret.new(namespace: "default", foreign_id: "brokered-#{SecureRandom.hex(4)}",
+                              inject_config: { "header" => "Authorization" }, created_by: users(:globex_admin))
+    secret.build_source(source_type: "token_broker", config: { "credential_id" => cred.oid })
+    secret.rules.build(host: "api.example.com", position: 0)
+    secret.save!
+
+    principal = principal_with_grants(secret)
+
+    # Bootstrapping (no token yet) -> the secret is omitted from sync entirely.
+    assert_empty principal.sync_secrets
+
+    # Once control mints a token, it is delivered inline like a control_plane value.
+    cred.update!(access_token: "live-token", expires_at: 1.hour.from_now, last_refresh: Time.current)
+    secrets = principal.sync_secrets
+    assert_equal 1, secrets.length
+    assert_equal({ "type" => "control_plane", "value" => "live-token" }, secrets.first["source"])
+
+    # ...and redacted in the operator inspection view (no special-casing needed).
+    assert_equal "[redacted]", principal.effective_config.dig("secrets", 0, "source", "value")
+  end
+
   test "sync_transforms emits a gcp_auth transform per granted GcpAuthSecret" do
     transforms = principal_with_grants(gcp_auth_secrets(:acme_bigquery)).sync_transforms
     assert_equal 1, transforms.length

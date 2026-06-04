@@ -12,7 +12,7 @@ class SecretSource < ApplicationRecord
     "1password" => { required: %w[secret_ref], optional: %w[token_env] },
     "1password_connect" => { required: %w[secret_ref], optional: %w[host_env token_env] },
     "control_plane" => { required: [], optional: [] },
-    "token_broker" => { required: %w[credential_id], optional: %w[failure_ttl] }
+    "token_broker" => { required: %w[credential_id], optional: [] }
   }.freeze
 
   # A source belongs to exactly one owner. static_secret feeds the `secrets`
@@ -40,11 +40,27 @@ class SecretSource < ApplicationRecord
   # discriminated by `type`. For control_plane sources the decrypted value is
   # delivered inline; all other types pass their config through (the proxy's
   # backend resolvers read the matching keys and ignore unknown ones).
+  #
+  # A token_broker source is resolved server-side: control mints and rotates the
+  # access token, so it is delivered inline exactly like control_plane (the proxy
+  # injects it directly, and Principal.redact_live_secrets redacts it, with no
+  # special handling for either). The credential_id never reaches the proxy.
   def to_proxy_source
+    return { "type" => "control_plane", "value" => brokered_access_token } if source_type == "token_broker"
+
     source = config.is_a?(Hash) ? config.dup : {}
     source["type"] = source_type
     source["value"] = secret if source_type == "control_plane"
     source
+  end
+
+  # Whether this source can currently deliver a value to a proxy. Always true
+  # except for a token_broker source whose credential has not minted an access
+  # token yet (bootstrapping) or is dead -- those are omitted from sync so the
+  # proxy never receives an empty inline value (see Principal#sync_secrets).
+  def deliverable?
+    return brokered_access_token.present? if source_type == "token_broker"
+    true
   end
 
   # Resolves this source to a plaintext value inside control, for the broker
@@ -87,6 +103,16 @@ class SecretSource < ApplicationRecord
   validate :role_matches_owner
 
   private
+
+  # The current access token for a token_broker source's referenced credential,
+  # or nil when the source is not a token_broker, the credential is missing, or it
+  # has not minted a token yet. Memoized so deliverable? and to_proxy_source share
+  # one lookup per sync.
+  def brokered_access_token
+    return @brokered_access_token if defined?(@brokered_access_token)
+    credential_id = config.is_a?(Hash) ? config["credential_id"] : nil
+    @brokered_access_token = credential_id && BrokerCredential.find_by_oid(credential_id)&.access_token
+  end
 
   def at_most_one_owner
     # Check the association object, not just the FK column: when built through a

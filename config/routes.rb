@@ -68,8 +68,6 @@ Rails.application.routes.draw do
 
       # Called by iron-proxy instances (proxy bearer auth, not ApiKey auth).
       post "proxy/sync", to: "proxy_sync#create"
-      # Vends a managed credential's current access token to iron-proxy.
-      get "credentials/:id/access_token", to: "credentials#access_token"
     end
   end
 

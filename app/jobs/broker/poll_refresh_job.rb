@@ -6,8 +6,8 @@ module Broker
   # if its enqueue is ever lost).
   #
   # FOR UPDATE SKIP LOCKED skips credentials whose refresh is already in flight
-  # (locked by RefreshCredentialJob or an in-band vend request), so we don't
-  # enqueue redundant work for them.
+  # (locked by a RefreshCredentialJob), so we don't enqueue redundant work for
+  # them.
   class PollRefreshJob < ApplicationJob
     queue_as :default
 

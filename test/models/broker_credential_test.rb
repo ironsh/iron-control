@@ -158,39 +158,6 @@ class BrokerCredentialTest < ActiveSupport::TestCase
     assert_equal "blob_not_bootstrapped", bc.dead_reason
   end
 
-  # --- access_token! (vend path) --------------------------------------------
-
-  test "access_token returns the cached token without refreshing" do
-    now = Time.current
-    bc = create_credential
-    bc.update!(access_token: "cached", expires_at: now + 1.hour, last_refresh: now)
-    bc.refresh_client = StubClient.new { flunk "should not refresh a fresh token" }
-    token, expires_at = bc.access_token!(now: now)
-    assert_equal "cached", token
-    assert_in_delta (now + 1.hour).to_f, expires_at.to_f, 1
-  end
-
-  test "access_token refreshes a stale token in-band" do
-    now = Time.current
-    bc = create_credential
-    bc.update!(access_token: "stale", expires_at: now - 1.minute, last_refresh: now - 1.hour)
-    bc.refresh_client = StubClient.new { result(access_token: "fresh", expires_in: 3600) }
-    token, = bc.access_token!(now: now)
-    assert_equal "fresh", token
-  end
-
-  test "access_token raises NotReady before any refresh" do
-    bc = create_credential
-    assert_raises(Broker::NotReadyError) { bc.access_token! }
-  end
-
-  test "access_token raises Dead when dead" do
-    bc = create_credential
-    bc.update!(dead: true, dead_reason: "invalid_grant")
-    err = assert_raises(Broker::DeadError) { bc.access_token! }
-    assert_equal "invalid_grant", err.reason
-  end
-
   # --- scope ----------------------------------------------------------------
 
   test "refreshable includes never-attempted and due, excludes dead and future" do

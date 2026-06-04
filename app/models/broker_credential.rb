@@ -1,13 +1,13 @@
 # A managed OAuth credential whose refresh-token lifecycle iron-control owns
 # itself: the in-control port of iron-token-broker. control drives a refresh loop
 # (Broker::PollRefreshJob -> Broker::RefreshCredentialJob -> #refresh!) that mints
-# fresh access tokens before expiry, and vends the current access token to
-# iron-proxy at GET /api/v1/credentials/:id/access_token (#access_token!).
+# fresh access tokens before expiry.
 #
-# Unlike the other secret types, a BrokerCredential is NOT synced to the proxy
-# and is NOT grantable. It is referenced by `credential_id` (its oid) from a
-# `token_broker` SecretSource on some grantable secret; the proxy resolves that
-# source at request time by calling the vend endpoint.
+# The minted access token reaches iron-proxy through the normal /sync path: a
+# `token_broker` SecretSource on some grantable secret references this credential
+# by `credential_id` (its oid), and SecretSource#to_proxy_source resolves it to
+# the current access token, delivered inline like a control_plane value. A
+# BrokerCredential is itself NOT synced and NOT grantable.
 #
 # It owns its own input sources -- client_id, optional client_secret, and any
 # token-endpoint headers -- each a SecretSource with a role. Because the refresh
@@ -92,8 +92,8 @@ class BrokerCredential < ApplicationRecord
   end
 
   # Performs one refresh attempt under a row lock (the single-writer guarantee:
-  # the scheduled job and an in-band vend request serialize on the same row, so
-  # the refresh family is never used twice concurrently). Persists the outcome --
+  # concurrent refresh attempts serialize on the same row, so the refresh family
+  # is never used twice concurrently). Persists the outcome --
   # success advances the blob + schedules the next refresh, a retryable failure
   # schedules a backoff retry, and an unrecoverable failure marks the credential
   # dead. Never raises for an IdP/config failure; the state is in the row.
@@ -116,22 +116,6 @@ class BrokerCredential < ApplicationRecord
         mark_dead!(e.reason)
       end
     end
-  end
-
-  # Returns [access_token, expires_at] for the vend endpoint, refreshing in-band
-  # if the cached token is stale. Raises Broker::DeadError / Broker::NotReadyError
-  # for the HTTP layer to map to 422 / 503. Ported from AccessToken().
-  def access_token!(now: Time.current)
-    raise Broker::DeadError, dead_reason if dead?
-    raise Broker::NotReadyError if last_refresh.nil? && access_token.blank?
-    return [ access_token, expires_at ] if access_token.present? && now < expires_at
-
-    # Stale or empty: drive an in-band refresh (shares the row lock with the
-    # scheduled loop, so concurrent vend requests coalesce).
-    refresh!(now: now)
-    raise Broker::DeadError, dead_reason if dead?
-    raise Broker::NotReadyError if access_token.blank?
-    [ access_token, expires_at ]
   end
 
   private

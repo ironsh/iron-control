@@ -123,20 +123,47 @@ class SecretSourceTest < ActiveSupport::TestCase
     assert s.valid?, s.errors.full_messages.inspect
   end
 
-  test "token_broker source accepts failure_ttl" do
+  test "token_broker source rejects unknown config keys" do
     s = new_source(source_type: "token_broker", config: { "credential_id" => "shared", "failure_ttl" => "30s" })
-    assert s.valid?, s.errors.full_messages.inspect
+    assert_not s.valid?
+    assert s.errors[:config].any? { |m| m.include?("failure_ttl") }
   end
 
   test "token_broker source requires credential_id" do
-    s = new_source(source_type: "token_broker", config: { "failure_ttl" => "30s" })
+    s = new_source(source_type: "token_broker", config: {})
     assert_not s.valid?
     assert s.errors[:config].any? { |m| m.include?("credential_id") }
   end
 
-  test "token_broker source maps through to_proxy_source" do
-    s = new_source(source_type: "token_broker", config: { "credential_id" => "shared", "ttl" => "1m" })
-    assert_equal({ "credential_id" => "shared", "ttl" => "1m", "type" => "token_broker" }, s.to_proxy_source)
+  test "token_broker source resolves to a control_plane inline value at sync" do
+    cred = make_broker_credential(access_token: "live-token")
+    s = new_source(source_type: "token_broker", config: { "credential_id" => cred.oid })
+    assert_equal({ "type" => "control_plane", "value" => "live-token" }, s.to_proxy_source)
+    assert s.deliverable?
+  end
+
+  test "token_broker source is not deliverable when the credential has no token yet" do
+    cred = make_broker_credential(access_token: nil) # bootstrapping
+    s = new_source(source_type: "token_broker", config: { "credential_id" => cred.oid })
+    assert_equal({ "type" => "control_plane", "value" => nil }, s.to_proxy_source)
+    assert_not s.deliverable?
+  end
+
+  test "token_broker source is not deliverable when the credential is missing" do
+    s = new_source(source_type: "token_broker", config: { "credential_id" => "bcr_missing" })
+    assert_not s.deliverable?
+  end
+
+  # A persisted BrokerCredential with a client_id source. access_token is set
+  # via the model so encryption applies.
+  def make_broker_credential(access_token:)
+    bc = BrokerCredential.new(namespace: "default", foreign_id: "src-#{SecureRandom.hex(4)}",
+                              token_endpoint: "https://idp.example/token",
+                              created_by: users(:acme_admin), refresh_token: "seed")
+    bc.sources.build(source_type: "control_plane", secret: "cid", role: "client_id", role_kind: "credential_field")
+    bc.save!
+    bc.update!(access_token: access_token, expires_at: 1.hour.from_now, last_refresh: Time.current) if access_token
+    bc
   end
 
   test "rejects belonging to more than one owner" do

@@ -2,7 +2,7 @@ module Broker
   # Refreshes one BrokerCredential. limits_concurrency serializes runs per
   # credential at the queue layer so duplicate enqueues (e.g. two poll ticks)
   # don't pile up; BrokerCredential#refresh! takes a row lock as the real
-  # single-writer guarantee, shared with the in-band vend path.
+  # single-writer guarantee.
   #
   # #refresh! never raises for an IdP or config failure -- it records the outcome
   # (backoff schedule or dead state) in the row -- so this job does not rely on
