@@ -12,14 +12,12 @@ class BrokerCredentialTest < ActiveSupport::TestCase
   end
 
   def build_credential(refresh_token: "seed-rt", **overrides)
-    bc = BrokerCredential.new({
+    BrokerCredential.new({
       namespace: "default", foreign_id: "cred-#{SecureRandom.hex(4)}",
       token_endpoint: "https://idp.example/token", scopes: %w[a b],
+      client_id: "cid", client_secret: "sec",
       created_by: users(:acme_admin), refresh_token: refresh_token
     }.merge(overrides))
-    bc.sources.build(source_type: "control_plane", secret: "cid", role: "client_id", role_kind: "credential_field")
-    bc.sources.build(source_type: "control_plane", secret: "sec", role: "client_secret", role_kind: "credential_field")
-    bc
   end
 
   def create_credential(**kw)
@@ -30,23 +28,24 @@ class BrokerCredentialTest < ActiveSupport::TestCase
 
   # --- validations ----------------------------------------------------------
 
-  test "valid with a client_id source" do
+  test "valid with a client_id" do
     assert build_credential.valid?
   end
 
-  test "invalid without a client_id source" do
-    bc = BrokerCredential.new(namespace: "default", token_endpoint: "https://idp.example/token", created_by: users(:acme_admin))
+  test "invalid without a client_id" do
+    bc = build_credential(client_id: nil)
     refute bc.valid?
-    assert(bc.errors[:sources].any? { |m| m.include?("client_id") })
+    assert bc.errors[:client_id].any?
   end
 
-  test "invalid with a non-control-resolvable source" do
-    bc = build_credential
-    bc.sources.first.source_type = "aws_sm"
-    bc.sources.first.config = { "secret_id" => "x" }
-    bc.sources.first.secret = nil
-    refute bc.valid?
-    assert(bc.errors[:sources].any? { |m| m.include?("not resolvable inside control") })
+  test "client_secret and token_endpoint_headers are encrypted at rest" do
+    bc = create_credential(client_secret: "shh", token_endpoint_headers: { "X-Api-Key" => "k" })
+    raw = BrokerCredential.connection.select_one(
+      "SELECT client_secret, token_endpoint_headers FROM broker_credentials WHERE id = #{bc.id}"
+    )
+    refute_includes raw["client_secret"].to_s, "shh"
+    refute_includes raw["token_endpoint_headers"].to_s, "X-Api-Key"
+    assert_equal({ "X-Api-Key" => "k" }, bc.reload.token_endpoint_headers)
   end
 
   test "early_refresh_fraction must be in [0,1)" do
@@ -133,19 +132,15 @@ class BrokerCredentialTest < ActiveSupport::TestCase
     assert_equal "invalid_grant", bc.dead_reason
   end
 
-  test "source resolution failure is retryable" do
-    # An env client_id source pointing at an unset var can't be resolved inside
-    # control -> SourceResolutionError, classified retryable (not dead).
-    bc = BrokerCredential.new(namespace: "default", foreign_id: "res-#{SecureRandom.hex(4)}",
-                              token_endpoint: "https://idp.example/token",
-                              created_by: users(:acme_admin), refresh_token: "seed")
-    bc.sources.build(source_type: "env", config: { "var" => "DEFINITELY_UNSET_#{SecureRandom.hex(4)}" },
-                     role: "client_id", role_kind: "credential_field")
-    bc.save!
+  test "refresh passes client credentials and token-endpoint headers to the client" do
+    captured = {}
+    bc = create_credential(client_id: "the-id", client_secret: "the-secret",
+                           token_endpoint_headers: { "X-Api-Key" => "k" })
+    bc.refresh_client = StubClient.new { |**kw| captured = kw; result }
     bc.refresh!
-    bc.reload
-    refute bc.dead?
-    assert_equal 1, bc.failure_count
+    assert_equal "the-id", captured[:client_id]
+    assert_equal "the-secret", captured[:client_secret]
+    assert_equal({ "X-Api-Key" => "k" }, captured[:headers])
   end
 
   test "refresh with no seed marks dead as not bootstrapped" do

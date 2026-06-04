@@ -25,7 +25,6 @@ class SecretSource < ApplicationRecord
   belongs_to :oauth_token_secret, optional: true
   belongs_to :pg_dsn_secret, optional: true
   belongs_to :hmac_secret, optional: true
-  belongs_to :broker_credential, optional: true
 
   # Only set for oauth_token_secret- and hmac_secret-owned sources: whether
   # `role` names a credential field (client_id, secret, ...) or a token-endpoint
@@ -63,37 +62,10 @@ class SecretSource < ApplicationRecord
     true
   end
 
-  # Resolves this source to a plaintext value inside control, for the broker
-  # refresh loop. Only CONTROL_RESOLVABLE_SOURCE_TYPES are supported; anything
-  # else (aws_sm, 1password, ...) is a proxy-side resolver and raises here.
-  # Raises Broker::SourceResolutionError so the credential's refresh classifies
-  # it as a configuration failure rather than an IdP failure.
-  def resolve_value
-    case source_type
-    when "control_plane"
-      secret
-    when "env"
-      var = config["var"]
-      value = ENV[var]
-      raise Broker::SourceResolutionError, "env var #{var.inspect} is not set" if value.blank?
-      value
-    else
-      raise Broker::SourceResolutionError,
-            "source_type #{source_type.inspect} cannot be resolved inside control"
-    end
-  end
-
-  OWNER_ASSOCIATIONS = %i[static_secret gcp_auth_secret oauth_token_secret pg_dsn_secret hmac_secret broker_credential].freeze
+  OWNER_ASSOCIATIONS = %i[static_secret gcp_auth_secret oauth_token_secret pg_dsn_secret hmac_secret].freeze
 
   # Owners whose sources fill a named role (credential field or endpoint header).
-  ROLE_OWNERS = %i[oauth_token_secret hmac_secret broker_credential].freeze
-
-  # Source types iron-control can resolve to a plaintext value *itself* (as
-  # opposed to passing the reference through to iron-proxy, which resolves the
-  # rest). The broker refresh loop runs inside control, so a broker_credential's
-  # client_id/client_secret/header sources must be one of these. env reads
-  # control's own process environment; control_plane decrypts the inline secret.
-  CONTROL_RESOLVABLE_SOURCE_TYPES = %w[control_plane env].freeze
+  ROLE_OWNERS = %i[oauth_token_secret hmac_secret].freeze
 
   validates :source_type, presence: true, inclusion: { in: SOURCE_TYPES }
   validate :config_is_a_hash

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_04_120001) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_04_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -28,6 +28,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_04_120001) do
 
   create_table "broker_credentials", force: :cascade do |t|
     t.text "access_token"
+    t.string "client_id"
+    t.text "client_secret"
     t.datetime "created_at", null: false
     t.bigint "created_by_id", null: false
     t.boolean "dead", default: false, null: false
@@ -48,6 +50,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_04_120001) do
     t.text "refresh_token"
     t.jsonb "scopes", default: [], null: false
     t.string "token_endpoint", null: false
+    t.text "token_endpoint_headers"
     t.datetime "updated_at", null: false
     t.index ["created_by_id"], name: "index_broker_credentials_on_created_by_id"
     t.index ["labels"], name: "index_broker_credentials_on_labels", using: :gin
@@ -227,7 +230,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_04_120001) do
   end
 
   create_table "secret_sources", force: :cascade do |t|
-    t.bigint "broker_credential_id"
     t.jsonb "config", default: {}, null: false
     t.datetime "created_at", null: false
     t.bigint "gcp_auth_secret_id"
@@ -240,8 +242,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_04_120001) do
     t.string "source_type", null: false
     t.bigint "static_secret_id"
     t.datetime "updated_at", null: false
-    t.index ["broker_credential_id", "role", "role_kind"], name: "index_secret_sources_on_broker_credential_owner_and_role", unique: true
-    t.index ["broker_credential_id"], name: "index_secret_sources_on_broker_credential_id"
     t.index ["gcp_auth_secret_id"], name: "index_secret_sources_on_gcp_auth_secret_id", unique: true
     t.index ["hmac_secret_id", "role", "role_kind"], name: "index_secret_sources_on_hmac_owner_and_role", unique: true
     t.index ["hmac_secret_id"], name: "index_secret_sources_on_hmac_secret_id"
@@ -299,7 +299,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_04_120001) do
   add_foreign_key "request_rules", "oauth_token_secrets"
   add_foreign_key "request_rules", "static_secrets"
   add_foreign_key "roles", "users", column: "created_by_id"
-  add_foreign_key "secret_sources", "broker_credentials"
   add_foreign_key "secret_sources", "gcp_auth_secrets"
   add_foreign_key "secret_sources", "hmac_secrets"
   add_foreign_key "secret_sources", "oauth_token_secrets"

@@ -10,6 +10,13 @@ class CreateBrokerCredentials < ActiveRecord::Migration[8.1]
       t.string :token_endpoint, null: false
       t.jsonb :scopes, null: false, default: []
 
+      # OAuth client credentials, resolved by control itself. client_id is not
+      # secret (it travels in OAuth requests); client_secret and any custom
+      # token-endpoint headers are encrypted at the model layer.
+      t.string :client_id
+      t.text :client_secret
+      t.text :token_endpoint_headers
+
       # Timing knobs. Defaults mirror iron-token-broker's config.go applyDefaults.
       t.integer :early_refresh_slack_seconds, null: false, default: 300      # 5m
       t.float :early_refresh_fraction, null: false, default: 0.2

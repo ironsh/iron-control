@@ -25,29 +25,28 @@ module Api
         refute row.key?("refresh_token")
       end
 
-      test "show returns config and status but never tokens" do
+      test "show returns config and status but never secret material" do
         bc = broker_credentials(:acme_managed_gmail)
         get api_v1_broker_credential_url(id: bc.oid), headers: auth_headers
         assert_response :ok
         data = json_body.fetch("data")
         assert_equal "https://oauth2.googleapis.com/token", data["token_endpoint"]
-        assert_equal({ "source_type" => "env", "config" => { "var" => "GMAIL_CLIENT_ID" } },
-                     data.dig("credentials", "client_id"))
+        assert_equal "gmail-client-id", data["client_id"]
+        refute data.key?("client_secret")
         refute data.key?("access_token")
         refute data.key?("refresh_token")
       end
 
-      test "create seeds the refresh_token, schedules it due now, and redacts it" do
+      test "create seeds the refresh_token, schedules it due now, and redacts secrets" do
         body = {
           data: {
             namespace: "acme", foreign_id: "new-managed",
             token_endpoint: "https://idp.example/token",
             scopes: [ "x" ],
+            client_id: "the-client-id",
+            client_secret: "the-client-secret",
             refresh_token: "super-secret-seed",
-            credentials: {
-              client_id: { source_type: "control_plane", secret: "cid" },
-              client_secret: { source_type: "control_plane", secret: "sec" }
-            }
+            token_endpoint_headers: { "X-Api-Key" => "k" }
           }
         }
 
@@ -56,37 +55,29 @@ module Api
         end
         assert_response :created
         data = json_body.fetch("data")
+        assert_equal "the-client-id", data["client_id"]
+        refute data.key?("client_secret")
         refute data.key?("refresh_token")
+        assert_equal [ "X-Api-Key" ], data["token_endpoint_header_names"]
         assert data["next_attempt_at"].present?, "should be scheduled due"
 
         created = BrokerCredential.find_by_oid(data["id"])
         assert_equal "super-secret-seed", created.refresh_token # persisted + decryptable
-        assert_equal %w[client_id client_secret].sort, created.sources.map(&:role).sort
+        assert_equal "the-client-secret", created.client_secret
+        assert_equal({ "X-Api-Key" => "k" }, created.token_endpoint_headers)
       end
 
-      test "create rejects a missing client_id source" do
+      test "create rejects a missing client_id" do
         body = {
           data: {
             namespace: "acme", foreign_id: "incomplete",
             token_endpoint: "https://idp.example/token",
-            credentials: { client_secret: { source_type: "control_plane", secret: "sec" } }
+            client_secret: "sec"
           }
         }
         assert_no_difference -> { BrokerCredential.count } do
           post api_v1_broker_credentials_url, params: body.to_json, headers: auth_headers
         end
-        assert_response :unprocessable_entity
-      end
-
-      test "create rejects a non-control-resolvable source" do
-        body = {
-          data: {
-            namespace: "acme", foreign_id: "bad-source",
-            token_endpoint: "https://idp.example/token",
-            credentials: { client_id: { source_type: "aws_sm", config: { secret_id: "x" } } }
-          }
-        }
-        post api_v1_broker_credentials_url, params: body.to_json, headers: auth_headers
         assert_response :unprocessable_entity
       end
 
@@ -105,7 +96,7 @@ module Api
         assert_equal "fresh-seed", bc.refresh_token
       end
 
-      test "destroy removes the credential and its sources" do
+      test "destroy removes the credential" do
         bc = broker_credentials(:globex_managed_api)
         assert_difference -> { BrokerCredential.count } => -1 do
           delete api_v1_broker_credential_url(id: bc.oid), headers: auth_headers(token = "iak_globex-ci-token")

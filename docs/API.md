@@ -99,7 +99,7 @@ Errors return an `error` object with a `message` and, for validation failures, a
 
 ### Secret sources
 
-A secret source describes where a credential value is resolved from. It appears as the `source` of a static secret, the `keyfile` of a GCP auth secret, each entry in an OAuth token secret's `credentials` and `token_endpoint_headers` maps, and each entry in a broker credential's `credentials` and `token_endpoint_headers` maps.
+A secret source describes where a credential value is resolved from. It appears as the `source` of a static secret, the `keyfile` of a GCP auth secret, and each entry in an OAuth token secret's `credentials` and `token_endpoint_headers` maps.
 
 Shape:
 
@@ -611,7 +611,7 @@ A broker credential is an OAuth credential whose refresh-token lifecycle iron-co
 
 Unlike the secret types above, a broker credential is not granted directly and is not injected on its own. It is referenced by a `token_broker` source on a grantable secret (typically a [static secret](#static-secrets)), which carries the rules and injection config. The `refresh_token` never leaves iron-control.
 
-Each input field (`client_id`, an optional `client_secret`, and any token-endpoint headers) is its own [secret source](#secret-sources). Because the refresh runs inside iron-control, these sources must be resolvable by the control plane: only the `control_plane` and `env` source types are allowed.
+The OAuth client credentials it refreshes with are fields on the credential, resolved by iron-control itself. `client_id` is not secret and is returned in responses; `client_secret` and the `token_endpoint_headers` values are encrypted at rest and never returned.
 
 ### Attributes
 
@@ -623,27 +623,29 @@ Each input field (`client_id`, an optional `client_secret`, and any token-endpoi
 | `labels`                       | optional    | |
 | `token_endpoint`               | required    | OAuth token endpoint the refresh request is sent to. |
 | `scopes`                       | optional    | Array of strings. |
+| `client_id`                    | required    | OAuth client id. Returned in responses. |
+| `client_secret`                | optional    | OAuth client secret. Write-only and encrypted at rest; omit for public clients. Never returned. |
+| `token_endpoint_headers`       | optional    | Object mapping header name to a string value, sent on the refresh request. Values are write-only and encrypted; only the header names are returned (as `token_endpoint_header_names`). |
 | `refresh_token`                | optional    | Write-only seed. Supplying a value (re)bootstraps the credential: it is scheduled to refresh immediately and any dead state is cleared. Never returned. |
-| `credentials`                  | required    | Object mapping field → [secret source](#secret-sources). `client_id` is required; `client_secret` is optional. Sources must be `control_plane` or `env`. |
-| `token_endpoint_headers`       | optional    | Object mapping header name → [secret source](#secret-sources). Sent on the refresh request. |
 | `early_refresh_slack_seconds`  | optional    | Refresh this many seconds before expiry. Defaults to `300`. |
 | `early_refresh_fraction`       | optional    | Refresh once this fraction of the token's lifetime remains, when that is larger than the slack. In `[0, 1)`. Defaults to `0.2`. |
 | `max_refresh_interval_seconds` | optional    | Refresh at least this often, even for long-lived tokens. Defaults to `86400`. |
 | `refresh_timeout_seconds`      | optional    | Per-attempt timeout for the token endpoint request. Defaults to `30`. |
 
-Read-only status fields are returned but never accepted in requests:
+Read-only fields are returned but never accepted in requests:
 
-| Field             | Notes |
-| ----------------- | ----- |
-| `status`          | `bootstrapping` (no token minted yet), `live`, or `dead` (an unrecoverable refresh failure; needs a new `refresh_token`). |
-| `expires_at`      | When the current access token expires. |
-| `last_refresh`    | When the last successful refresh completed. |
-| `next_attempt_at` | When the next refresh is scheduled. |
-| `dead`            | Whether the credential is dead. |
-| `dead_reason`     | Why it is dead (e.g. `invalid_grant`). |
-| `failure_count`   | Consecutive retryable failures since the last success. |
+| Field                         | Notes |
+| ----------------------------- | ----- |
+| `status`                      | `bootstrapping` (no token minted yet), `live`, or `dead` (an unrecoverable refresh failure; needs a new `refresh_token`). |
+| `token_endpoint_header_names` | The configured header names (values are not returned). |
+| `expires_at`                  | When the current access token expires. |
+| `last_refresh`                | When the last successful refresh completed. |
+| `next_attempt_at`             | When the next refresh is scheduled. |
+| `dead`                        | Whether the credential is dead. |
+| `dead_reason`                 | Why it is dead (e.g. `invalid_grant`). |
+| `failure_count`               | Consecutive retryable failures since the last success. |
 
-The minted `access_token` and the `refresh_token` are never returned in any response.
+The minted `access_token`, the `refresh_token`, the `client_secret`, and the `token_endpoint_headers` values are never returned in any response.
 
 ### Create
 
@@ -657,16 +659,14 @@ The minted `access_token` and the `refresh_token` are never returned in any resp
     "name": "Gmail",
     "token_endpoint": "https://oauth2.googleapis.com/token",
     "scopes": ["https://www.googleapis.com/auth/gmail.readonly"],
-    "refresh_token": "1//0g...",
-    "credentials": {
-      "client_id": { "source_type": "control_plane", "secret": "1234.apps.googleusercontent.com", "config": {} },
-      "client_secret": { "source_type": "control_plane", "secret": "GOCSPX-...", "config": {} }
-    }
+    "client_id": "1234.apps.googleusercontent.com",
+    "client_secret": "GOCSPX-...",
+    "refresh_token": "1//0g..."
   }
 }
 ```
 
-Returns `201`. The token blob and the `refresh_token` seed are never echoed back:
+Returns `201`. The token blob, the `refresh_token` seed, and the `client_secret` are never echoed back:
 
 ```json
 {
@@ -679,15 +679,12 @@ Returns `201`. The token blob and the `refresh_token` seed are never echoed back
     "labels": {},
     "token_endpoint": "https://oauth2.googleapis.com/token",
     "scopes": ["https://www.googleapis.com/auth/gmail.readonly"],
+    "client_id": "1234.apps.googleusercontent.com",
+    "token_endpoint_header_names": [],
     "early_refresh_slack_seconds": 300,
     "early_refresh_fraction": 0.2,
     "max_refresh_interval_seconds": 86400,
     "refresh_timeout_seconds": 30,
-    "credentials": {
-      "client_id": { "source_type": "control_plane", "config": {} },
-      "client_secret": { "source_type": "control_plane", "config": {} }
-    },
-    "token_endpoint_headers": {},
     "status": "bootstrapping",
     "expires_at": null,
     "last_refresh": null,
@@ -729,8 +726,8 @@ When a refresh fails unrecoverably (for example the IdP returns `invalid_grant` 
 | `GET`  | `/api/v1/broker_credentials?namespace=default` | List. `namespace` required; `labels[k]=v` and pagination optional. |
 | `GET`  | `/api/v1/broker_credentials/:id` | Fetch one. `404` if missing. |
 | `GET`  | `/api/v1/broker_credentials/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
-| `PUT`/`PATCH` | `/api/v1/broker_credentials/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`. A `refresh_token` reseeds and clears dead state; omitting `credentials` preserves the existing input sources. |
-| `DELETE` | `/api/v1/broker_credentials/:id` | Delete. Returns `204`; `404` if missing. Cascades to the credential's input sources. |
+| `PUT`/`PATCH` | `/api/v1/broker_credentials/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`. A `refresh_token` reseeds and clears dead state. Omitted fields are preserved; `client_secret` and `token_endpoint_headers` are only changed when supplied. |
+| `DELETE` | `/api/v1/broker_credentials/:id` | Delete. Returns `204`; `404` if missing. |
 
 ## Principals
 

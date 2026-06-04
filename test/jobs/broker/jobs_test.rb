@@ -2,19 +2,12 @@ require "test_helper"
 
 module Broker
   class JobsTest < ActiveJob::TestCase
-    # client_id resolves from an unset env var, so #refresh! fails fast with a
-    # SourceResolutionError (retryable) -- no network, and a visible DB effect
-    # (failure_count) proving the job drove the refresh.
     def make_credential(**overrides)
-      bc = BrokerCredential.new({
+      BrokerCredential.create!({
         namespace: "default", foreign_id: "job-#{SecureRandom.hex(4)}",
-        token_endpoint: "https://idp.example/token",
+        token_endpoint: "https://idp.example/token", client_id: "cid",
         created_by: users(:acme_admin), refresh_token: "seed"
       }.merge(overrides))
-      bc.sources.build(source_type: "env", config: { "var" => "UNSET_#{SecureRandom.hex(4)}" },
-                       role: "client_id", role_kind: "credential_field")
-      bc.save!
-      bc
     end
 
     test "PollRefreshJob enqueues a refresh only for due credentials" do
@@ -33,13 +26,13 @@ module Broker
     end
 
     test "RefreshCredentialJob drives the credential refresh" do
-      bc = make_credential
-      assert_equal 0, bc.failure_count
+      # No refresh_token seed: refresh! marks the credential dead without any
+      # network call, proving the job invoked it.
+      bc = make_credential(refresh_token: nil)
       Broker::RefreshCredentialJob.perform_now(bc.id)
       bc.reload
-      # The refresh ran (and failed retryably on the unresolvable source).
-      assert_equal 1, bc.failure_count
-      refute bc.dead?
+      assert bc.dead?
+      assert_equal "blob_not_bootstrapped", bc.dead_reason
     end
 
     test "RefreshCredentialJob is a no-op for a missing credential" do

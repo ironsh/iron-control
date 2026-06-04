@@ -9,10 +9,10 @@
 # the current access token, delivered inline like a control_plane value. A
 # BrokerCredential is itself NOT synced and NOT grantable.
 #
-# It owns its own input sources -- client_id, optional client_secret, and any
-# token-endpoint headers -- each a SecretSource with a role. Because the refresh
-# runs inside control (not the proxy), those sources must be control-resolvable
-# (control_plane or env); see SecretSource::CONTROL_RESOLVABLE_SOURCE_TYPES.
+# The OAuth client credentials it refreshes with -- client_id, optional
+# client_secret, and any token-endpoint headers -- are fields on the credential,
+# resolved by control itself. client_id is not secret; client_secret and the
+# header values are encrypted at rest.
 class BrokerCredential < ApplicationRecord
   oid_prefix "bcr"
 
@@ -20,11 +20,6 @@ class BrokerCredential < ApplicationRecord
 
   URL_SAFE_FORMAT = /\A[A-Za-z0-9\-._~]+\z/
   URL_SAFE_MESSAGE = "must contain only URL-safe characters (A-Z, a-z, 0-9, -, ., _, ~)"
-
-  # credential_field roles this credential understands. Header sources use
-  # role_kind endpoint_header with arbitrary (header-name) roles.
-  CREDENTIAL_FIELDS = %w[client_id client_secret].freeze
-  REQUIRED_CREDENTIAL_FIELDS = %w[client_id].freeze
 
   # The access token must keep at least this much life past the scheduled
   # refresh, regardless of slack/fraction. Mirrors the 60s floor in
@@ -37,13 +32,15 @@ class BrokerCredential < ApplicationRecord
   BACKOFF_BASE_SECONDS = 5
   BACKOFF_MAX_SECONDS = 5 * 60
 
-  has_many :sources, class_name: "SecretSource", dependent: :destroy
   belongs_to :created_by, class_name: "User"
 
   attr_writer :refresh_client
 
+  serialize :token_endpoint_headers, coder: JSON
   encrypts :access_token
   encrypts :refresh_token
+  encrypts :client_secret
+  encrypts :token_endpoint_headers
 
   scope :refreshable, -> {
     where(dead: false).where("next_attempt_at IS NULL OR next_attempt_at <= ?", Time.current)
@@ -53,14 +50,14 @@ class BrokerCredential < ApplicationRecord
   validates :foreign_id, uniqueness: { scope: :namespace, allow_nil: true },
             format: { with: URL_SAFE_FORMAT, message: URL_SAFE_MESSAGE }, allow_nil: true
   validates :token_endpoint, presence: true
+  validates :client_id, presence: true
   validates :early_refresh_fraction,
             numericality: { greater_than_or_equal_to: 0, less_than: 1 }
   validates :early_refresh_slack_seconds, :max_refresh_interval_seconds, :refresh_timeout_seconds,
             numericality: { only_integer: true, greater_than: 0 }
   validate :labels_is_a_hash
   validate :scopes_is_an_array
-  validate :credential_sources_valid
-  validate :sources_are_control_resolvable
+  validate :token_endpoint_headers_valid
 
   # bootstrapping: seeded but never refreshed; dead: needs human re-auth;
   # live: has minted at least one access token.
@@ -107,8 +104,6 @@ class BrokerCredential < ApplicationRecord
 
       result = perform_refresh(now: now)
       apply_success!(result, now: now)
-    rescue Broker::SourceResolutionError => e
-      record_retryable_failure(e.message, now: now)
     rescue Broker::RefreshError => e
       if e.retryable?
         record_retryable_failure(e.message, now: now)
@@ -125,18 +120,13 @@ class BrokerCredential < ApplicationRecord
   end
 
   def perform_refresh(now:)
-    client_id = require_source("client_id").resolve_value
-    client_secret = find_source("client_secret")&.resolve_value
-    headers = sources.select { |s| s.role_kind == "endpoint_header" }
-                     .to_h { |s| [ s.role, s.resolve_value ] }
-
     refresh_client.refresh(
       token_endpoint: token_endpoint,
       client_id: client_id,
       client_secret: client_secret,
       refresh_token: refresh_token,
       scopes: scopes,
-      headers: headers,
+      headers: token_endpoint_headers || {},
       timeout: refresh_timeout_seconds
     )
   end
@@ -176,15 +166,6 @@ class BrokerCredential < ApplicationRecord
     [ exp, BACKOFF_MAX_SECONDS ].min
   end
 
-  def find_source(role)
-    sources.find { |s| s.role_kind == "credential_field" && s.role == role }
-  end
-
-  def require_source(role)
-    find_source(role) ||
-      raise(Broker::SourceResolutionError, "credential source #{role.inspect} is not configured")
-  end
-
   def labels_is_a_hash
     errors.add(:labels, "must be a hash") unless labels.is_a?(Hash)
   end
@@ -194,24 +175,10 @@ class BrokerCredential < ApplicationRecord
     errors.add(:scopes, "must be an array of strings")
   end
 
-  def credential_sources_valid
-    credential_roles = sources.select(&:credential_field?).map(&:role)
-
-    credential_roles.each do |role|
-      errors.add(:sources, "#{role.inspect} is not a valid credential field") unless CREDENTIAL_FIELDS.include?(role)
-    end
-
-    (REQUIRED_CREDENTIAL_FIELDS - credential_roles).each do |missing|
-      errors.add(:sources, "is missing required credential field #{missing.inspect}")
-    end
-  end
-
-  def sources_are_control_resolvable
-    sources.each do |s|
-      next if SecretSource::CONTROL_RESOLVABLE_SOURCE_TYPES.include?(s.source_type)
-      errors.add(:sources,
-                 "source_type #{s.source_type.inspect} is not resolvable inside control " \
-                 "(use #{SecretSource::CONTROL_RESOLVABLE_SOURCE_TYPES.join(" or ")})")
-    end
+  def token_endpoint_headers_valid
+    return if token_endpoint_headers.nil?
+    valid = token_endpoint_headers.is_a?(Hash) &&
+            token_endpoint_headers.all? { |k, v| k.is_a?(String) && v.is_a?(String) }
+    errors.add(:token_endpoint_headers, "must be an object mapping header names to string values") unless valid
   end
 end

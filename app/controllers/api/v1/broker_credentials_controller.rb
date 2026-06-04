@@ -47,6 +47,7 @@ module Api
 
       def assign_and_save!(ref, attrs)
         base = attrs.permit(:namespace, :foreign_id, :name, :description, :token_endpoint,
+                            :client_id, :client_secret,
                             :early_refresh_slack_seconds, :early_refresh_fraction,
                             :max_refresh_interval_seconds, :refresh_timeout_seconds,
                             labels: {}, scopes: [])
@@ -58,15 +59,20 @@ module Api
 
         BrokerCredential.transaction do
           ref.assign_attributes(base)
-          # Only replace the source graph when the body supplies it, so a partial
-          # update (e.g. a refresh_token-only re-auth) preserves existing sources.
-          if attrs.key?(:credentials) || attrs.key?(:token_endpoint_headers)
-            ref.sources = build_credential_sources(attrs) + build_header_sources(attrs)
-          end
+          apply_token_endpoint_headers(ref, attrs)
           apply_refresh_token_seed(ref, attrs)
           ref.save!
           ref.reload
         end
+      end
+
+      # token_endpoint_headers is an open map of header name => string value, so it
+      # is read as an unsafe hash (the model validates the shape) and only when the
+      # body supplies it, so a partial update leaves the existing headers in place.
+      def apply_token_endpoint_headers(ref, attrs)
+        return unless attrs.key?(:token_endpoint_headers)
+        raw = attrs[:token_endpoint_headers]
+        ref.token_endpoint_headers = raw.respond_to?(:to_unsafe_h) ? raw.to_unsafe_h : raw
       end
 
       # The refresh_token is a write-only bootstrap/re-auth seed. Supplying a new
@@ -84,32 +90,10 @@ module Api
         ref.next_attempt_at = Time.current
       end
 
-      def build_credential_sources(attrs)
-        return [] unless attrs.key?(:credentials) && attrs[:credentials].present?
-
-        attrs.require(:credentials).each_pair.map do |role, src|
-          SecretSource.new(permit_source(src).merge(role: role.to_s, role_kind: "credential_field"))
-        end
-      end
-
-      def build_header_sources(attrs)
-        return [] unless attrs.key?(:token_endpoint_headers) && attrs[:token_endpoint_headers].present?
-
-        attrs.require(:token_endpoint_headers).each_pair.map do |name, src|
-          SecretSource.new(permit_source(src).merge(role: name.to_s, role_kind: "endpoint_header"))
-        end
-      end
-
-      def permit_source(src)
-        params = src.is_a?(ActionController::Parameters) ? src : ActionController::Parameters.new(src)
-        params.permit(:source_type, :secret, config: {}).to_h
-      end
-
-      # Observability only -- access_token and refresh_token are deliberately
-      # never included.
+      # Observability only. The client_secret, the token_endpoint_headers values,
+      # the minted access_token, and the refresh_token are deliberately never
+      # included; only the header names are surfaced.
       def record_payload(ref)
-        cred = ref.sources.select(&:credential_field?)
-        headers = ref.sources.select(&:endpoint_header?)
         {
           id: ref.oid,
           namespace: ref.namespace,
@@ -119,12 +103,12 @@ module Api
           labels: ref.labels,
           token_endpoint: ref.token_endpoint,
           scopes: ref.scopes,
+          client_id: ref.client_id,
+          token_endpoint_header_names: (ref.token_endpoint_headers || {}).keys,
           early_refresh_slack_seconds: ref.early_refresh_slack_seconds,
           early_refresh_fraction: ref.early_refresh_fraction,
           max_refresh_interval_seconds: ref.max_refresh_interval_seconds,
           refresh_timeout_seconds: ref.refresh_timeout_seconds,
-          credentials: cred.to_h { |s| [ s.role, source_payload(s) ] },
-          token_endpoint_headers: headers.to_h { |s| [ s.role, source_payload(s) ] },
           status: ref.status,
           expires_at: ref.expires_at,
           last_refresh: ref.last_refresh,
@@ -135,10 +119,6 @@ module Api
           created_at: ref.created_at,
           updated_at: ref.updated_at
         }
-      end
-
-      def source_payload(source)
-        { source_type: source.source_type, config: source.config }
       end
 
       def render_validation_error(record)

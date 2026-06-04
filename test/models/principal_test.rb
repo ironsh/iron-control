@@ -121,11 +121,9 @@ class PrincipalTest < ActiveSupport::TestCase
   end
 
   test "sync_secrets delivers a brokered token inline and omits it until minted" do
-    cred = BrokerCredential.new(namespace: "default", foreign_id: "sync-#{SecureRandom.hex(4)}",
-                                token_endpoint: "https://idp.example/token",
-                                created_by: users(:globex_admin), refresh_token: "seed")
-    cred.sources.build(source_type: "control_plane", secret: "cid", role: "client_id", role_kind: "credential_field")
-    cred.save!
+    cred = BrokerCredential.create!(namespace: "default", foreign_id: "sync-#{SecureRandom.hex(4)}",
+                                    token_endpoint: "https://idp.example/token", client_id: "cid",
+                                    created_by: users(:globex_admin), refresh_token: "seed")
 
     secret = StaticSecret.new(namespace: "default", foreign_id: "brokered-#{SecureRandom.hex(4)}",
                               inject_config: { "header" => "Authorization" }, created_by: users(:globex_admin))

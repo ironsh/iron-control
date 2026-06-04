@@ -8,12 +8,6 @@
 module Broker
   class Error < StandardError; end
 
-  # Raised when a credential's input source (client_id/client_secret/header)
-  # cannot be resolved inside control -- a misconfiguration, not an IdP failure.
-  # The refresh loop treats this as retryable so a transiently-missing env var
-  # recovers without marking the credential dead.
-  class SourceResolutionError < Error; end
-
   # Raised by RefreshClient when the token-endpoint round trip fails. `retryable`
   # distinguishes transient failures (network, 5xx, bodyless 4xx, malformed 2xx)
   # from unrecoverable ones (RFC 6749 5.2 error codes), which mark the credential

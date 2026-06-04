@@ -154,14 +154,12 @@ class SecretSourceTest < ActiveSupport::TestCase
     assert_not s.deliverable?
   end
 
-  # A persisted BrokerCredential with a client_id source. access_token is set
-  # via the model so encryption applies.
+  # A persisted BrokerCredential. access_token is set via the model so encryption
+  # applies.
   def make_broker_credential(access_token:)
-    bc = BrokerCredential.new(namespace: "default", foreign_id: "src-#{SecureRandom.hex(4)}",
-                              token_endpoint: "https://idp.example/token",
-                              created_by: users(:acme_admin), refresh_token: "seed")
-    bc.sources.build(source_type: "control_plane", secret: "cid", role: "client_id", role_kind: "credential_field")
-    bc.save!
+    bc = BrokerCredential.create!(namespace: "default", foreign_id: "src-#{SecureRandom.hex(4)}",
+                                  token_endpoint: "https://idp.example/token", client_id: "cid",
+                                  created_by: users(:acme_admin), refresh_token: "seed")
     bc.update!(access_token: access_token, expires_at: 1.hour.from_now, last_refresh: Time.current) if access_token
     bc
   end
@@ -171,20 +169,20 @@ class SecretSourceTest < ActiveSupport::TestCase
                    static_secret: static_secrets(:github_token_inject),
                    gcp_auth_secret: gcp_auth_secrets(:acme_bigquery))
     assert_not s.valid?
-    assert_includes s.errors[:base], "must belong to at most one of static_secret, gcp_auth_secret, oauth_token_secret, pg_dsn_secret, hmac_secret, broker_credential"
+    assert_includes s.errors[:base], "must belong to at most one of static_secret, gcp_auth_secret, oauth_token_secret, pg_dsn_secret, hmac_secret"
   end
 
   test "role is only allowed for an oauth_token_secret or hmac_secret source" do
     s = new_source(source_type: "env", config: { "var" => "FOO" },
                    static_secret: static_secrets(:github_token_inject), role: "client_id")
     assert_not s.valid?
-    assert_includes s.errors[:role], "is only allowed for a oauth_token_secret or hmac_secret or broker_credential source"
+    assert_includes s.errors[:role], "is only allowed for a oauth_token_secret or hmac_secret source"
   end
 
   test "role is required for an oauth_token_secret source" do
     s = new_source(source_type: "env", config: { "var" => "FOO" },
                    oauth_token_secret: oauth_token_secrets(:acme_gmail_oauth))
     assert_not s.valid?
-    assert_includes s.errors[:role], "can't be blank for a oauth_token_secret or hmac_secret or broker_credential source"
+    assert_includes s.errors[:role], "can't be blank for a oauth_token_secret or hmac_secret source"
   end
 end
