@@ -120,7 +120,7 @@ Shape:
 | `1password`           | `secret_ref`           | `token_env`                 | 1Password CLI / service account. |
 | `1password_connect`   | `secret_ref`           | `host_env`, `token_env`     | 1Password Connect server. |
 | `control_plane`       | — (no config keys)     | —                           | Value is supplied inline; see below. |
-| `token_broker`        | `credential_id`        | —                           | A managed [broker credential](#broker-credentials); see below. |
+| `token_broker`        | `credential_id`        | `credential_namespace`      | A managed [broker credential](#broker-credentials); see below. |
 
 `control_plane` is special: the value is stored in iron-control itself. Supply it as a top-level `secret` field on the source (not inside `config`), and leave `config` empty:
 
@@ -134,7 +134,17 @@ Shape:
 
 The `secret` field is encrypted at rest, is write-only, and is never returned in any response. It is only permitted for `control_plane` sources; supplying it for any other type is a validation error, and omitting it for `control_plane` is also an error.
 
-`token_broker` is also resolved by iron-control rather than by the proxy. `credential_id` names a [broker credential](#broker-credentials), and at sync time iron-control substitutes that credential's current access token, delivered inline exactly like a `control_plane` value. The `credential_id` itself never reaches the proxy. If the credential has no current token (it is still bootstrapping, or it is dead), the owning secret is omitted from the proxy's config until the credential recovers.
+`token_broker` is also resolved by iron-control rather than by the proxy. `credential_id` names a [broker credential](#broker-credentials), and at sync time iron-control substitutes that credential's current access token, delivered inline exactly like a `control_plane` value. The reference never reaches the proxy. If the credential has no current token (it is still bootstrapping, or it is dead), the owning secret is omitted from the proxy's config until the credential recovers.
+
+`credential_id` is either the credential's opaque id (`bcr_...`) or its `foreign_id`. With a `foreign_id`, `credential_namespace` is required; with an opaque id it must be omitted (opaque ids are namespace independent, so they can reference a credential in any namespace, including a shared one). The reference is validated on write: it must resolve to an existing broker credential.
+
+```json
+{ "source_type": "token_broker", "config": { "credential_id": "bcr_abc123" } }
+```
+
+```json
+{ "source_type": "token_broker", "config": { "credential_id": "gmail", "credential_namespace": "acme" } }
+```
 
 ### Request rules
 

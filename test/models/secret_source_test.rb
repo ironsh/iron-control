@@ -34,6 +34,8 @@ class SecretSourceTest < ActiveSupport::TestCase
     SecretSource::SOURCE_TYPES.each do |type|
       required = SecretSource::CONFIG_SCHEMA[type][:required]
       config = required.each_with_object({}) { |k, h| h[k] = "x" }
+      # token_broker's credential_id must resolve to a real credential.
+      config["credential_id"] = make_broker_credential(access_token: nil).oid if type == "token_broker"
       config["json_key"] = "password"
       config["ttl"] = "5m"
       attrs = { source_type: type, config: config }
@@ -118,13 +120,53 @@ class SecretSourceTest < ActiveSupport::TestCase
     assert_equal s, SecretSource.find_by_oid(s.oid)
   end
 
-  test "token_broker source is valid with credential_id" do
-    s = new_source(source_type: "token_broker", config: { "credential_id" => "shared" })
+  test "token_broker source is valid referencing a credential by oid" do
+    cred = make_broker_credential(access_token: nil)
+    s = new_source(source_type: "token_broker", config: { "credential_id" => cred.oid })
     assert s.valid?, s.errors.full_messages.inspect
   end
 
+  test "token_broker source is valid referencing a credential by namespace + foreign_id" do
+    cred = make_broker_credential(access_token: nil)
+    s = new_source(source_type: "token_broker",
+                   config: { "credential_id" => cred.foreign_id, "credential_namespace" => cred.namespace })
+    assert s.valid?, s.errors.full_messages.inspect
+  end
+
+  test "token_broker source rejects a reference that does not resolve" do
+    # A foreign_id in a namespace with no such credential.
+    s = new_source(source_type: "token_broker",
+                   config: { "credential_id" => "ghost", "credential_namespace" => "nope" })
+    assert_not s.valid?
+    assert s.errors[:config].any? { |m| m.include?("does not reference an existing broker credential") }
+
+    # A well-formed oid for a credential that no longer exists.
+    cred = make_broker_credential(access_token: nil)
+    oid = cred.oid
+    cred.destroy!
+    s2 = new_source(source_type: "token_broker", config: { "credential_id" => oid })
+    assert_not s2.valid?
+    assert s2.errors[:config].any? { |m| m.include?("does not reference an existing broker credential") }
+  end
+
+  test "token_broker foreign_id reference requires a namespace" do
+    cred = make_broker_credential(access_token: nil)
+    s = new_source(source_type: "token_broker", config: { "credential_id" => cred.foreign_id })
+    assert_not s.valid?
+    assert s.errors[:config].any? { |m| m.include?("credential_namespace is required") }
+  end
+
+  test "token_broker oid reference forbids a namespace" do
+    cred = make_broker_credential(access_token: nil)
+    s = new_source(source_type: "token_broker",
+                   config: { "credential_id" => cred.oid, "credential_namespace" => "default" })
+    assert_not s.valid?
+    assert s.errors[:config].any? { |m| m.include?("not allowed when credential_id is an opaque id") }
+  end
+
   test "token_broker source rejects unknown config keys" do
-    s = new_source(source_type: "token_broker", config: { "credential_id" => "shared", "failure_ttl" => "30s" })
+    cred = make_broker_credential(access_token: nil)
+    s = new_source(source_type: "token_broker", config: { "credential_id" => cred.oid, "failure_ttl" => "30s" })
     assert_not s.valid?
     assert s.errors[:config].any? { |m| m.include?("failure_ttl") }
   end
@@ -140,6 +182,13 @@ class SecretSourceTest < ActiveSupport::TestCase
     s = new_source(source_type: "token_broker", config: { "credential_id" => cred.oid })
     assert_equal({ "type" => "control_plane", "value" => "live-token" }, s.to_proxy_source)
     assert s.deliverable?
+  end
+
+  test "token_broker foreign_id reference resolves at sync" do
+    cred = make_broker_credential(access_token: "live-token")
+    s = new_source(source_type: "token_broker",
+                   config: { "credential_id" => cred.foreign_id, "credential_namespace" => cred.namespace })
+    assert_equal({ "type" => "control_plane", "value" => "live-token" }, s.to_proxy_source)
   end
 
   test "token_broker source is not deliverable when the credential has no token yet" do

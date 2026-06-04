@@ -12,7 +12,7 @@ class SecretSource < ApplicationRecord
     "1password" => { required: %w[secret_ref], optional: %w[token_env] },
     "1password_connect" => { required: %w[secret_ref], optional: %w[host_env token_env] },
     "control_plane" => { required: [], optional: [] },
-    "token_broker" => { required: %w[credential_id], optional: [] }
+    "token_broker" => { required: %w[credential_id], optional: %w[credential_namespace] }
   }.freeze
 
   # A source belongs to exactly one owner. static_secret feeds the `secrets`
@@ -43,9 +43,9 @@ class SecretSource < ApplicationRecord
   # A token_broker source is resolved server-side: control mints and rotates the
   # access token, so it is delivered inline exactly like control_plane (the proxy
   # injects it directly, and Principal.redact_live_secrets redacts it, with no
-  # special handling for either). The credential_id never reaches the proxy.
+  # special handling for either). The credential reference never reaches the proxy.
   def to_proxy_source
-    return { "type" => "control_plane", "value" => brokered_access_token } if source_type == "token_broker"
+    return { "type" => "control_plane", "value" => brokered_credential&.access_token } if source_type == "token_broker"
 
     source = config.is_a?(Hash) ? config.dup : {}
     source["type"] = source_type
@@ -58,7 +58,7 @@ class SecretSource < ApplicationRecord
   # token yet (bootstrapping) or is dead -- those are omitted from sync so the
   # proxy never receives an empty inline value (see Principal#sync_secrets).
   def deliverable?
-    return brokered_access_token.present? if source_type == "token_broker"
+    return brokered_credential&.access_token.present? if source_type == "token_broker"
     true
   end
 
@@ -73,17 +73,52 @@ class SecretSource < ApplicationRecord
   validate :secret_matches_source_type
   validate :at_most_one_owner
   validate :role_matches_owner
+  validate :token_broker_reference_resolves
 
   private
 
-  # The current access token for a token_broker source's referenced credential,
-  # or nil when the source is not a token_broker, the credential is missing, or it
-  # has not minted a token yet. Memoized so deliverable? and to_proxy_source share
-  # one lookup per sync.
-  def brokered_access_token
-    return @brokered_access_token if defined?(@brokered_access_token)
-    credential_id = config.is_a?(Hash) ? config["credential_id"] : nil
-    @brokered_access_token = credential_id && BrokerCredential.find_by_oid(credential_id)&.access_token
+  # The BrokerCredential a token_broker source references. credential_id is either
+  # an opaque id (bcr_...) or a foreign_id; the latter is resolved within
+  # credential_namespace. Returns nil when the source is not a token_broker, the
+  # reference is incomplete, or nothing matches. Memoized so deliverable?,
+  # to_proxy_source, and validation share one lookup.
+  def brokered_credential
+    return @brokered_credential if defined?(@brokered_credential)
+    @brokered_credential = resolve_brokered_credential
+  end
+
+  def resolve_brokered_credential
+    return nil unless source_type == "token_broker" && config.is_a?(Hash)
+    ref = config["credential_id"]
+    return nil if ref.blank?
+
+    if BrokerCredential.decode_oid(ref)
+      BrokerCredential.find_by_oid(ref)
+    elsif config["credential_namespace"].present?
+      BrokerCredential.find_by(namespace: config["credential_namespace"], foreign_id: ref)
+    end
+  end
+
+  # A token_broker source must point at a real credential. credential_namespace
+  # is required for a foreign_id reference and forbidden for an oid reference.
+  def token_broker_reference_resolves
+    return unless source_type == "token_broker" && config.is_a?(Hash)
+    ref = config["credential_id"]
+    return if ref.blank? # missing-key reported by config_matches_source_type
+
+    if BrokerCredential.decode_oid(ref)
+      if config["credential_namespace"].present?
+        errors.add(:config, "credential_namespace is not allowed when credential_id is an opaque id")
+        return
+      end
+    elsif config["credential_namespace"].blank?
+      errors.add(:config, "credential_namespace is required when credential_id is a foreign_id")
+      return
+    end
+
+    if brokered_credential.nil?
+      errors.add(:config, "credential_id #{ref.inspect} does not reference an existing broker credential")
+    end
   end
 
   def at_most_one_owner
