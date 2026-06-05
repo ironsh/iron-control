@@ -8,6 +8,10 @@
   <p class="mt-1 text-sm text-zinc-500">Operator console sign in.</p>
 </div>
 
+<% if flash[:notice] %>
+  <div class="mb-6 rounded border border-ink-600 bg-ink-850/60 px-4 py-3 text-sm text-zinc-400"><%= flash[:notice] %></div>
+<% end %>
+
 <div class="rounded-xl border border-ink-600 bg-ink-850/60 p-6">
   <% if flash[:alert] %>
     <div class="mb-6 rounded border border-red-500/40 bg-red-500/[0.08] px-4 py-3 text-sm text-red-300"><%= flash[:alert] %></div>
