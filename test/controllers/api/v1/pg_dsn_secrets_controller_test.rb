@@ -82,6 +82,7 @@ module Api
           data: {
             namespace: "acme",
             foreign_id: "inline-pg",
+            database: "app",
             dsn: { source_type: "control_plane", secret: "postgres://u:sup3rsecret@db/app" }
           }
         }
@@ -91,11 +92,43 @@ module Api
         refute_includes response.body, "sup3rsecret"
       end
 
+      test "POST is rejected when the inline DSN database does not match" do
+        body = {
+          data: {
+            namespace: "acme",
+            foreign_id: "mismatch-pg",
+            database: "app",
+            dsn: { source_type: "control_plane", secret: "postgres://u:pw@db/other" }
+          }
+        }
+
+        assert_no_difference -> { PgDsnSecret.count } do
+          post api_v1_pg_dsn_secrets_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :unprocessable_entity
+      end
+
       test "POST without a dsn source is rejected" do
         body = {
           data: {
             namespace: "acme",
-            foreign_id: "no-dsn"
+            foreign_id: "no-dsn",
+            database: "no-dsn-db"
+          }
+        }
+
+        assert_no_difference -> { PgDsnSecret.count } do
+          post api_v1_pg_dsn_secrets_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :unprocessable_entity
+      end
+
+      test "POST without a database is rejected" do
+        body = {
+          data: {
+            namespace: "acme",
+            foreign_id: "no-db",
+            dsn: { source_type: "env", config: { var: "PG_DSN" } }
           }
         }
 
@@ -126,6 +159,7 @@ module Api
         body = {
           data: {
             namespace: "acme",
+            database: "upsert-db",
             dsn: { source_type: "env", config: { var: "UPSERT_DSN" } }
           }
         }
