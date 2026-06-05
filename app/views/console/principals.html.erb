@@ -10,27 +10,33 @@
     <thead class="bg-ink-800/80 text-left text-xs uppercase tracking-wider text-zinc-500">
       <tr>
         <th class="px-5 py-3 font-medium">ID</th>
-        <th class="px-5 py-3 font-medium">Foreign ID</th>
         <th class="px-5 py-3 font-medium">Display Name</th>
-        <th class="px-5 py-3 font-medium">Namespace</th>
         <th class="px-5 py-3 font-medium">Labels</th>
         <th class="px-5 py-3 font-medium text-right"></th>
       </tr>
     </thead>
     <tbody class="divide-y divide-ink-700">
       <% if @principals.empty? %>
-        <tr><td colspan="6" class="px-5 py-10 text-center text-zinc-600">No principals yet.</td></tr>
+        <tr><td colspan="4" class="px-5 py-10 text-center text-zinc-600">No principals yet.</td></tr>
       <% end %>
       <% @principals.each do |p| %>
         <tr class="group cursor-pointer transition-colors hover:bg-iron-500/[0.06]"
             onclick="window.location='<%= console_principal_path(p.oid) %>'">
           <td class="px-5 py-3 whitespace-nowrap">
-            <span class="text-iron-400 group-hover:glow"><%= p.oid %></span>
+            <% if p.foreign_id.present? %>
+              <div class="text-iron-400 group-hover:glow" title="<%= p.foreign_id %>"><%= truncate_middle(p.foreign_id) %></div>
+              <%= id_meta_line(p.namespace, oid: p.oid) %>
+            <% else %>
+              <span class="text-iron-400 group-hover:glow"><%= p.oid %></span>
+              <%= id_meta_line(p.namespace) %>
+            <% end %>
           </td>
-          <td class="px-5 py-3 whitespace-nowrap text-zinc-300"><%= p.foreign_id || "—" %></td>
-          <td class="px-5 py-3 whitespace-nowrap text-zinc-100"><%= p.name.presence || %(<span class="text-zinc-600">unnamed</span>).html_safe %></td>
-          <td class="px-5 py-3 whitespace-nowrap">
-            <span class="rounded bg-ink-700 px-2 py-0.5 text-xs text-zinc-400"><%= p.namespace %></span>
+          <td class="px-5 py-3 whitespace-nowrap text-zinc-100">
+            <% if p.name.presence %>
+              <span title="<%= p.name %>"><%= truncate_middle(p.name) %></span>
+            <% else %>
+              <span class="text-zinc-600">unnamed</span>
+            <% end %>
           </td>
           <td class="px-5 py-3">
             <% if p.labels.present? %>

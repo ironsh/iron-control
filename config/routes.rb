@@ -19,7 +19,9 @@ Rails.application.routes.draw do
   get "console/principals", to: "console#principals", as: :console_principals
   get "console/principals/:id", to: "console#principal", as: :console_principal
   get "console/secrets", to: "console#secrets", as: :console_secrets
+  get "console/secrets/:kind/:id", to: "console#secret", as: :console_secret
   get "console/credentials", to: "console#credentials", as: :console_credentials
+  get "console/credentials/:id", to: "console#credential", as: :console_credential
 
   namespace :api do
     namespace :v1 do
