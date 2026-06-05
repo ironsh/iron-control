@@ -93,13 +93,13 @@ class ConsoleController < ApplicationController
   helper_method :secret_source_segments
   def secret_source_segments(record)
     case record
-    when StaticSecret then [source_segment(record.source)].compact
-    when PgDsnSecret  then [source_segment(record.dsn_source)].compact
+    when StaticSecret then [ source_segment(record.source) ].compact
+    when PgDsnSecret  then [ source_segment(record.dsn_source) ].compact
     when GcpAuthSecret
       if record.keyfile_source
-        [source_segment(record.keyfile_source)].compact
+        [ source_segment(record.keyfile_source) ].compact
       elsif (type = provider_label(record.credentials_provider))
-        [{ role: nil, type: type, ref: nil }]
+        [ { role: nil, type: type, ref: nil } ]
       else
         []
       end
