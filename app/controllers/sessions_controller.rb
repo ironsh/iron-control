@@ -5,6 +5,11 @@
 class SessionsController < ApplicationController
   layout "auth"
 
+  # The login form must be reachable while signed out, so it opts out of the
+  # app-wide require_login gate. (logout keeps the gate: it's a no-op when
+  # there's no session.)
+  skip_before_action :require_login, only: %i[new create]
+
   def new
     redirect_to console_principals_path if current_user
   end

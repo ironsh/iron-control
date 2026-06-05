@@ -7,6 +7,12 @@ class ApplicationController < ActionController::Base
 
   helper_method :current_user
 
+  # Gate every UI route behind a console session by default. Controllers that
+  # must stay reachable while signed out (e.g. the login form) skip this. API
+  # controllers descend from ActionController::API, not this class, so they keep
+  # their own ApiKey/proxy-token auth and are unaffected.
+  before_action :require_login
+
   private
 
   # The signed-in operator for cookie-session (console) requests, or nil. Distinct

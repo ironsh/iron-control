@@ -32,16 +32,26 @@
             <a href="<%= root_path %>" class="group">
               <span class="text-zinc-100 font-bold tracking-tight">iron-<span class="text-iron-500 glow">control</span></span>
             </a>
-            <nav class="flex items-center gap-1 text-sm">
-              <% nav = [["principals", console_principals_path], ["secrets", console_secrets_path], ["credentials", console_credentials_path]] %>
-              <% nav.each do |name, path| %>
-                <% active = request.path == path || (name == "principals" && request.path.start_with?("/console/principals")) %>
-                <a href="<%= path %>"
-                   class="px-4 py-2 transition-colors <%= active ? "text-iron-400" : "text-zinc-400 hover:text-zinc-100" %>">
-                  <%= name.capitalize %>
-                </a>
+            <div class="flex items-center gap-4 text-sm">
+              <nav class="flex items-center gap-1">
+                <% nav = [["principals", console_principals_path], ["secrets", console_secrets_path], ["credentials", console_credentials_path]] %>
+                <% nav.each do |name, path| %>
+                  <% active = request.path == path || (name == "principals" && request.path.start_with?("/console/principals")) %>
+                  <a href="<%= path %>"
+                     class="px-4 py-2 transition-colors <%= active ? "text-iron-400" : "text-zinc-400 hover:text-zinc-100" %>">
+                    <%= name.capitalize %>
+                  </a>
+                <% end %>
+              </nav>
+
+              <% if current_user %>
+                <div class="flex items-center gap-3 border-l border-ink-600 pl-4">
+                  <span class="text-zinc-500" title="<%= current_user.email %>"><%= current_user.email %></span>
+                  <%= button_to "Sign out", logout_path, method: :delete,
+                        class: "cursor-pointer rounded border border-ink-600 px-3 py-1.5 text-zinc-400 transition-colors hover:border-iron-500/40 hover:text-iron-300" %>
+                </div>
               <% end %>
-            </nav>
+            </div>
           </div>
         </div>
       </header>
