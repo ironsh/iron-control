@@ -24,6 +24,16 @@ class ConsoleController < ApplicationController
     "token_broker" => "credential_id"
   }.freeze
 
+  # Friendly labels for the source backend (and the gcp_auth credentials_provider
+  # type). The secrets table shows only this -- the full reference lives on the
+  # secret detail page.
+  SOURCE_TYPE_LABELS = {
+    "env" => "Env", "aws_sm" => "AWS-SM", "aws_ssm" => "AWS-SSM",
+    "1password" => "1Password", "1password_connect" => "1Password-Connect",
+    "control_plane" => "Inline", "token_broker" => "Token-Broker",
+    "workload_identity" => "Workload-Identity"
+  }.freeze
+
   def principals
     @principals = Principal.order(created_at: :asc, id: :asc)
   end
@@ -48,6 +58,16 @@ class ConsoleController < ApplicationController
     end
   end
 
+  def secret
+    cfg = SECRET_KINDS[params[:kind]]
+    return render plain: "secret not found", status: :not_found unless cfg
+
+    @kind = params[:kind]
+    @secret = cfg[:model].includes(cfg[:includes]).find_by_oid!(params[:id])
+  rescue ActiveRecord::RecordNotFound
+    render plain: "secret not found", status: :not_found
+  end
+
   # Managed broker credentials and their refresh-loop status. Distinct from
   # SECRET_KINDS because a broker credential is not grantable -- it is referenced
   # by a token_broker source rather than granted directly.
@@ -55,29 +75,56 @@ class ConsoleController < ApplicationController
     @credentials = BrokerCredential.order(created_at: :asc, id: :asc)
   end
 
+  def credential
+    @credential = BrokerCredential.find_by_oid!(params[:id])
+  rescue ActiveRecord::RecordNotFound
+    render plain: "credential not found", status: :not_found
+  end
+
   helper_method :secret_kind_label
   def secret_kind_label(slug)
     SECRET_KINDS.dig(slug, :label) || slug
   end
 
-  # Where a secret's value is resolved from, as a "source_type:reference" label
-  # (e.g. "env:STRIPE_KEY", "aws_sm:prod/db"). nil when the secret has no source.
-  helper_method :secret_source_ref
-  def secret_source_ref(record)
+  # Where a secret's value is resolved from, as a list of segments. Each segment
+  # is a hash { role:, type:, ref: } where +type+ is the source backend
+  # (e.g. "env", "aws_sm") and +ref+ is the reference within it (e.g. "STRIPE_KEY",
+  # "prod/db"); both +role+ and +ref+ may be nil. Empty when the secret has no source.
+  helper_method :secret_source_segments
+  def secret_source_segments(record)
     case record
-    when StaticSecret then source_label(record.source)
-    when PgDsnSecret   then source_label(record.dsn_source)
+    when StaticSecret then [ source_segment(record.source) ].compact
+    when PgDsnSecret  then [ source_segment(record.dsn_source) ].compact
     when GcpAuthSecret
-      record.keyfile_source ? source_label(record.keyfile_source) : provider_label(record.credentials_provider)
+      if record.keyfile_source
+        [ source_segment(record.keyfile_source) ].compact
+      elsif (type = provider_label(record.credentials_provider))
+        [ { role: nil, type: type, ref: nil } ]
+      else
+        []
+      end
     when OauthTokenSecret
-      fields = record.sources.select(&:credential_field?).sort_by(&:role)
-      labels = fields.map { |s| "#{s.role}=#{source_label(s)}" }
-      labels.presence&.join("  ·  ")
+      record.sources.select(&:credential_field?).sort_by(&:role).filter_map { |s| source_segment(s, role: s.role) }
     when HmacSecret
-      fields = record.sources.sort_by(&:role)
-      labels = fields.map { |s| "#{s.role}=#{source_label(s)}" }
-      labels.presence&.join("  ·  ")
+      record.sources.sort_by(&:role).filter_map { |s| source_segment(s, role: s.role) }
+    else
+      []
     end
+  end
+
+  # The distinct source backends a secret resolves from, as friendly labels
+  # (e.g. ["1Password", "Env"]). Used by the secrets table, which shows only the
+  # backend -- not the reference. Empty when the secret has no source.
+  helper_method :secret_source_types
+  def secret_source_types(record)
+    secret_source_segments(record).map { |seg| source_type_label(seg[:type]) }.uniq
+  end
+
+  # Friendly label for a source backend / provider type, falling back to the raw
+  # value for anything not in the table.
+  helper_method :source_type_label
+  def source_type_label(type)
+    SOURCE_TYPE_LABELS[type] || type
   end
 
   # The request header (or other target) the resolved secret is injected into.
@@ -101,18 +148,18 @@ class ConsoleController < ApplicationController
 
   private
 
-  def source_label(source)
+  def source_segment(source, role: nil)
     return nil unless source
 
     key = SOURCE_REF_KEYS[source.source_type]
-    detail =
+    ref =
       if key && source.config.is_a?(Hash)
         source.config[key]
       elsif source.source_type == "control_plane"
         "inline"
       end
 
-    detail.present? ? "#{source.source_type}:#{detail}" : source.source_type
+    { role: role, type: source.source_type, ref: ref.presence }
   end
 
   def provider_label(provider)
@@ -127,7 +174,7 @@ class ConsoleController < ApplicationController
       return "?#{cfg["query_param"]}" if cfg["query_param"].present?
     elsif record.replace_config.present?
       headers = Array(record.replace_config["match_headers"])
-      return headers.any? ? "replace → #{headers.join(", ")}" : "replace"
+      return headers.join(", ") if headers.any?
     end
     nil
   end
