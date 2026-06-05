@@ -1,6 +1,6 @@
 # Operator console: a lightweight, server-rendered HTML view over principals,
-# their effective grants, and secrets. Read-only and unauthenticated for now;
-# this is an internal inspection tool, distinct from the JSON API.
+# their effective grants, and secrets. Read-only; gated behind a console session
+# via ApplicationController#require_login. Distinct from the JSON API.
 class ConsoleController < ApplicationController
   layout "console"
 
