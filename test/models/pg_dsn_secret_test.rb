@@ -5,6 +5,7 @@ class PgDsnSecretTest < ActiveSupport::TestCase
     {
       namespace: "acme",
       foreign_id: "new-pg",
+      database: "new-db",
       created_by: users(:acme_admin)
     }.merge(overrides)
   end
@@ -12,6 +13,12 @@ class PgDsnSecretTest < ActiveSupport::TestCase
   def with_dsn(secret = nil)
     secret ||= PgDsnSecret.new(base_attrs)
     secret.dsn_source = SecretSource.new(source_type: "env", config: { "var" => "PG_DSN" })
+    secret
+  end
+
+  def with_inline_dsn(dsn, overrides = {})
+    secret = PgDsnSecret.new(base_attrs(overrides))
+    secret.dsn_source = SecretSource.new(source_type: "control_plane", secret: dsn)
     secret
   end
 
@@ -31,22 +38,56 @@ class PgDsnSecretTest < ActiveSupport::TestCase
     assert_includes secret.errors[:foreign_id], "can't be blank"
   end
 
+  test "requires a database (it is the routing key)" do
+    secret = with_dsn(PgDsnSecret.new(base_attrs(database: nil)))
+    assert_not secret.valid?
+    assert_includes secret.errors[:database], "can't be blank"
+  end
+
   test "role is optional" do
     assert with_dsn(PgDsnSecret.new(base_attrs(role: nil))).valid?
   end
 
-  test "database is optional" do
-    assert with_dsn(PgDsnSecret.new(base_attrs(database: nil))).valid?
-  end
-
   test "foreign_id is unique within a namespace" do
-    with_dsn(PgDsnSecret.new(base_attrs(foreign_id: "shared-pg"))).save!
-    dup = with_dsn(PgDsnSecret.new(base_attrs(foreign_id: "shared-pg")))
+    with_dsn(PgDsnSecret.new(base_attrs(foreign_id: "shared-pg", database: "db-a"))).save!
+    dup = with_dsn(PgDsnSecret.new(base_attrs(foreign_id: "shared-pg", database: "db-b")))
     assert_not dup.valid?
     assert_includes dup.errors[:foreign_id], "has already been taken"
   end
 
-  test "to_proxy_dsn keys the entry by foreign_id and carries the dsn source, database, and role" do
+  test "database is unique within a namespace" do
+    with_dsn(PgDsnSecret.new(base_attrs(foreign_id: "first-pg", database: "shared-db"))).save!
+    dup = with_dsn(PgDsnSecret.new(base_attrs(foreign_id: "second-pg", database: "shared-db")))
+    assert_not dup.valid?
+    assert_includes dup.errors[:database], "has already been taken"
+  end
+
+  test "an inline DSN whose database matches is valid" do
+    assert with_inline_dsn("postgres://u:pw@host:5432/new-db?sslmode=require").valid?
+  end
+
+  test "an inline DSN in keyword form whose database matches is valid" do
+    assert with_inline_dsn("host=db port=5432 user=u password=pw dbname=new-db").valid?
+  end
+
+  test "an inline DSN whose database differs is rejected" do
+    secret = with_inline_dsn("postgres://u:pw@host/other-db")
+    assert_not secret.valid?
+    assert_includes secret.errors[:database], %(must match the DSN database ("other-db"))
+  end
+
+  test "an inline DSN naming no database is rejected" do
+    secret = with_inline_dsn("host=db user=u password=pw")
+    assert_not secret.valid?
+    assert_includes secret.errors[:database], %(DSN names no database; it must match "new-db")
+  end
+
+  test "a non-inspectable DSN source skips the invariant check" do
+    # env source: the value lives on the proxy host, so no mismatch can be raised.
+    assert with_dsn(PgDsnSecret.new(base_attrs(database: "anything"))).valid?
+  end
+
+  test "to_proxy_dsn keys the entry by foreign_id and carries the dsn, database, and role" do
     secret = pg_dsn_secrets(:acme_analytics_pg)
     entry = secret.to_proxy_dsn
 
@@ -57,10 +98,11 @@ class PgDsnSecretTest < ActiveSupport::TestCase
     assert_equal "readonly", entry["role"]
   end
 
-  test "to_proxy_dsn omits database and role when blank" do
+  test "to_proxy_dsn omits role when blank but always carries database" do
     entry = pg_dsn_secrets(:acme_reporting_pg).to_proxy_dsn
-    refute entry.key?("database")
+
     refute entry.key?("role")
+    assert_equal "reporting", entry["database"]
     assert_equal "aws_sm", entry.dig("dsn", "type")
   end
 
