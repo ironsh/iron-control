@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_05_155736) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_08_210002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -24,6 +24,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_05_155736) do
     t.index ["deleted_at"], name: "index_api_keys_on_deleted_at"
     t.index ["token_hash"], name: "index_api_keys_on_token_hash", unique: true
     t.index ["user_id"], name: "index_api_keys_on_user_id"
+  end
+
+  create_table "aws_auth_secrets", force: :cascade do |t|
+    t.jsonb "allowed_regions", default: [], null: false
+    t.jsonb "allowed_services", default: [], null: false
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id", null: false
+    t.string "description"
+    t.string "foreign_id"
+    t.jsonb "labels", default: {}, null: false
+    t.string "name"
+    t.string "namespace", default: "default", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_aws_auth_secrets_on_created_by_id"
+    t.index ["labels"], name: "index_aws_auth_secrets_on_labels", using: :gin
+    t.index ["namespace", "foreign_id"], name: "index_aws_auth_secrets_on_namespace_and_foreign_id", unique: true
   end
 
   create_table "broker_credentials", force: :cascade do |t|
@@ -76,6 +92,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_05_155736) do
   end
 
   create_table "grants", force: :cascade do |t|
+    t.bigint "aws_auth_secret_id"
     t.datetime "created_at", null: false
     t.bigint "created_by_id", null: false
     t.bigint "gcp_auth_secret_id"
@@ -86,17 +103,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_05_155736) do
     t.bigint "role_id"
     t.bigint "static_secret_id"
     t.datetime "updated_at", null: false
+    t.index ["aws_auth_secret_id"], name: "index_grants_on_aws_auth_secret_id"
     t.index ["created_by_id"], name: "index_grants_on_created_by_id"
     t.index ["gcp_auth_secret_id"], name: "index_grants_on_gcp_auth_secret_id"
     t.index ["hmac_secret_id"], name: "index_grants_on_hmac_secret_id"
     t.index ["oauth_token_secret_id"], name: "index_grants_on_oauth_token_secret_id"
     t.index ["pg_dsn_secret_id"], name: "index_grants_on_pg_dsn_secret_id"
+    t.index ["principal_id", "aws_auth_secret_id"], name: "index_grants_uniq_principal_aws_auth_secret", unique: true, where: "((principal_id IS NOT NULL) AND (aws_auth_secret_id IS NOT NULL))"
     t.index ["principal_id", "gcp_auth_secret_id"], name: "index_grants_uniq_principal_gcp_auth_secret", unique: true, where: "((principal_id IS NOT NULL) AND (gcp_auth_secret_id IS NOT NULL))"
     t.index ["principal_id", "hmac_secret_id"], name: "index_grants_uniq_principal_hmac_secret", unique: true, where: "((principal_id IS NOT NULL) AND (hmac_secret_id IS NOT NULL))"
     t.index ["principal_id", "oauth_token_secret_id"], name: "index_grants_uniq_principal_oauth_token_secret", unique: true, where: "((principal_id IS NOT NULL) AND (oauth_token_secret_id IS NOT NULL))"
     t.index ["principal_id", "pg_dsn_secret_id"], name: "index_grants_uniq_principal_pg_dsn_secret", unique: true, where: "((principal_id IS NOT NULL) AND (pg_dsn_secret_id IS NOT NULL))"
     t.index ["principal_id", "static_secret_id"], name: "index_grants_uniq_principal_static_secret", unique: true, where: "((principal_id IS NOT NULL) AND (static_secret_id IS NOT NULL))"
     t.index ["principal_id"], name: "index_grants_on_principal_id"
+    t.index ["role_id", "aws_auth_secret_id"], name: "index_grants_uniq_role_aws_auth_secret", unique: true, where: "((role_id IS NOT NULL) AND (aws_auth_secret_id IS NOT NULL))"
     t.index ["role_id", "gcp_auth_secret_id"], name: "index_grants_uniq_role_gcp_auth_secret", unique: true, where: "((role_id IS NOT NULL) AND (gcp_auth_secret_id IS NOT NULL))"
     t.index ["role_id", "hmac_secret_id"], name: "index_grants_uniq_role_hmac_secret", unique: true, where: "((role_id IS NOT NULL) AND (hmac_secret_id IS NOT NULL))"
     t.index ["role_id", "oauth_token_secret_id"], name: "index_grants_uniq_role_oauth_token_secret", unique: true, where: "((role_id IS NOT NULL) AND (oauth_token_secret_id IS NOT NULL))"
@@ -197,6 +217,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_05_155736) do
   end
 
   create_table "request_rules", force: :cascade do |t|
+    t.bigint "aws_auth_secret_id"
     t.string "cidr"
     t.datetime "created_at", null: false
     t.bigint "gcp_auth_secret_id"
@@ -208,6 +229,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_05_155736) do
     t.integer "position", default: 0, null: false
     t.bigint "static_secret_id"
     t.datetime "updated_at", null: false
+    t.index ["aws_auth_secret_id"], name: "index_request_rules_on_aws_auth_secret_id"
     t.index ["gcp_auth_secret_id"], name: "index_request_rules_on_gcp_auth_secret_id"
     t.index ["hmac_secret_id"], name: "index_request_rules_on_hmac_secret_id"
     t.index ["host"], name: "index_request_rules_on_host"
@@ -230,6 +252,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_05_155736) do
   end
 
   create_table "secret_sources", force: :cascade do |t|
+    t.bigint "aws_auth_secret_id"
     t.jsonb "config", default: {}, null: false
     t.datetime "created_at", null: false
     t.bigint "gcp_auth_secret_id"
@@ -242,6 +265,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_05_155736) do
     t.string "source_type", null: false
     t.bigint "static_secret_id"
     t.datetime "updated_at", null: false
+    t.index ["aws_auth_secret_id", "role", "role_kind"], name: "index_secret_sources_on_aws_owner_and_role", unique: true
+    t.index ["aws_auth_secret_id"], name: "index_secret_sources_on_aws_auth_secret_id"
     t.index ["gcp_auth_secret_id"], name: "index_secret_sources_on_gcp_auth_secret_id", unique: true
     t.index ["hmac_secret_id", "role", "role_kind"], name: "index_secret_sources_on_hmac_owner_and_role", unique: true
     t.index ["hmac_secret_id"], name: "index_secret_sources_on_hmac_secret_id"
@@ -277,8 +302,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_05_155736) do
   end
 
   add_foreign_key "api_keys", "users"
+  add_foreign_key "aws_auth_secrets", "users", column: "created_by_id"
   add_foreign_key "broker_credentials", "users", column: "created_by_id"
   add_foreign_key "gcp_auth_secrets", "users", column: "created_by_id"
+  add_foreign_key "grants", "aws_auth_secrets"
   add_foreign_key "grants", "gcp_auth_secrets"
   add_foreign_key "grants", "hmac_secrets"
   add_foreign_key "grants", "oauth_token_secrets"
@@ -294,11 +321,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_05_155736) do
   add_foreign_key "principal_roles", "roles"
   add_foreign_key "principals", "users", column: "created_by_id"
   add_foreign_key "proxies", "principals", on_delete: :nullify
+  add_foreign_key "request_rules", "aws_auth_secrets"
   add_foreign_key "request_rules", "gcp_auth_secrets"
   add_foreign_key "request_rules", "hmac_secrets"
   add_foreign_key "request_rules", "oauth_token_secrets"
   add_foreign_key "request_rules", "static_secrets"
   add_foreign_key "roles", "users", column: "created_by_id"
+  add_foreign_key "secret_sources", "aws_auth_secrets"
   add_foreign_key "secret_sources", "gcp_auth_secrets"
   add_foreign_key "secret_sources", "hmac_secrets"
   add_foreign_key "secret_sources", "oauth_token_secrets"

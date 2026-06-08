@@ -51,6 +51,14 @@ class Principal < ApplicationRecord
       .order(:id)
   end
 
+  # aws_auth credentials this principal resolves to, via its effective grants.
+  def granted_aws_auth_secrets
+    AwsAuthSecret
+      .where(id: effective_grants.select(:aws_auth_secret_id))
+      .includes(:sources, :rules)
+      .order(:id)
+  end
+
   # oauth_token credentials this principal resolves to, via its effective grants.
   def granted_oauth_token_secrets
     OauthTokenSecret
@@ -93,6 +101,7 @@ class Principal < ApplicationRecord
   # `tokens` entry.
   def sync_transforms
     transforms = granted_gcp_auth_secrets.map(&:to_proxy_transform)
+    transforms += granted_aws_auth_secrets.map(&:to_proxy_transform)
     transforms += granted_hmac_secrets.map(&:to_proxy_transform)
 
     oauth_entries = granted_oauth_token_secrets.map(&:to_proxy_entry)

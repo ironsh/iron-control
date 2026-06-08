@@ -153,6 +153,16 @@ class PrincipalTest < ActiveSupport::TestCase
     assert_equal({ "type" => "workload_identity" }, transforms.first.dig("config", "credentials_provider"))
   end
 
+  test "sync_transforms emits an aws_auth transform per granted AwsAuthSecret" do
+    transforms = principal_with_grants(aws_auth_secrets(:acme_cloudwatch_aws)).sync_transforms
+    aws = transforms.find { |t| t["name"] == "aws_auth" }
+    refute_nil aws
+    assert_equal({ "type" => "env", "var" => "AWS_ACCESS_KEY_ID" }, aws.dig("config", "access_key_id"))
+    assert_equal({ "type" => "env", "var" => "AWS_SECRET_ACCESS_KEY" }, aws.dig("config", "secret_access_key"))
+    assert_equal %w[logs monitoring], aws.dig("config", "allowed_services")
+    assert_equal 1, aws.dig("config", "rules").length
+  end
+
   test "sync_transforms bundles all granted oauth tokens into one transform" do
     transforms = principal_with_grants(oauth_token_secrets(:acme_gmail_oauth)).sync_transforms
     oauth = transforms.find { |t| t["name"] == "oauth_token" }
