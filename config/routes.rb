@@ -33,6 +33,9 @@ Rails.application.routes.draw do
       resources :gcp_auth_secrets, only: %i[index show create update destroy] do
         collection { get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup }
       end
+      resources :aws_auth_secrets, only: %i[index show create update destroy] do
+        collection { get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup }
+      end
       resources :oauth_token_secrets, only: %i[index show create update destroy] do
         collection { get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup }
       end

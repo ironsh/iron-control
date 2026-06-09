@@ -22,6 +22,7 @@ class SecretSource < ApplicationRecord
   # one hmac_sign entry's HMAC key and any additional named credentials.
   belongs_to :static_secret, optional: true
   belongs_to :gcp_auth_secret, optional: true
+  belongs_to :aws_auth_secret, optional: true
   belongs_to :oauth_token_secret, optional: true
   belongs_to :pg_dsn_secret, optional: true
   belongs_to :hmac_secret, optional: true
@@ -75,10 +76,12 @@ class SecretSource < ApplicationRecord
     )
   end
 
-  OWNER_ASSOCIATIONS = %i[static_secret gcp_auth_secret oauth_token_secret pg_dsn_secret hmac_secret].freeze
+  OWNER_ASSOCIATIONS = %i[static_secret gcp_auth_secret aws_auth_secret oauth_token_secret pg_dsn_secret hmac_secret].freeze
 
   # Owners whose sources fill a named role (credential field or endpoint header).
-  ROLE_OWNERS = %i[oauth_token_secret hmac_secret].freeze
+  # aws_auth's sources are credential fields (access_key_id, secret_access_key,
+  # session_token), like hmac/oauth_token.
+  ROLE_OWNERS = %i[oauth_token_secret hmac_secret aws_auth_secret].freeze
 
   validates :source_type, presence: true, inclusion: { in: SOURCE_TYPES }
   validate :config_is_a_hash

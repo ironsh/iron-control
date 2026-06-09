@@ -2,15 +2,16 @@ class Grant < ApplicationRecord
   oid_prefix "grant"
 
   GRANTEE_ASSOCIATIONS = %i[principal role].freeze
-  GRANTABLE_ASSOCIATIONS = %i[static_secret gcp_auth_secret oauth_token_secret pg_dsn_secret hmac_secret].freeze
+  GRANTABLE_ASSOCIATIONS = %i[static_secret gcp_auth_secret aws_auth_secret oauth_token_secret pg_dsn_secret hmac_secret].freeze
 
   attr_readonly :principal_id, :role_id, :static_secret_id, :gcp_auth_secret_id,
-                :oauth_token_secret_id, :pg_dsn_secret_id, :hmac_secret_id
+                :aws_auth_secret_id, :oauth_token_secret_id, :pg_dsn_secret_id, :hmac_secret_id
 
   belongs_to :principal, optional: true
   belongs_to :role, optional: true
   belongs_to :static_secret, optional: true
   belongs_to :gcp_auth_secret, optional: true
+  belongs_to :aws_auth_secret, optional: true
   belongs_to :oauth_token_secret, optional: true
   belongs_to :pg_dsn_secret, optional: true
   belongs_to :hmac_secret, optional: true

@@ -10,6 +10,7 @@ class ConsoleController < ApplicationController
   SECRET_KINDS = {
     "static" => { model: StaticSecret, label: "Static", includes: :source },
     "gcp_auth" => { model: GcpAuthSecret, label: "GCP Auth", includes: :keyfile_source },
+    "aws_auth" => { model: AwsAuthSecret, label: "AWS Auth", includes: :sources },
     "oauth_token" => { model: OauthTokenSecret, label: "OAuth Token", includes: :sources },
     "pg_dsn" => { model: PgDsnSecret, label: "Postgres DSN", includes: :dsn_source },
     "hmac" => { model: HmacSecret, label: "HMAC", includes: :sources }
@@ -44,6 +45,7 @@ class ConsoleController < ApplicationController
     @granted = {
       "static" => @principal.granted_static_secrets,
       "gcp_auth" => @principal.granted_gcp_auth_secrets,
+      "aws_auth" => @principal.granted_aws_auth_secrets,
       "oauth_token" => @principal.granted_oauth_token_secrets,
       "pg_dsn" => @principal.granted_pg_dsn_secrets,
       "hmac" => @principal.granted_hmac_secrets
@@ -105,7 +107,7 @@ class ConsoleController < ApplicationController
       end
     when OauthTokenSecret
       record.sources.select(&:credential_field?).sort_by(&:role).filter_map { |s| source_segment(s, role: s.role) }
-    when HmacSecret
+    when HmacSecret, AwsAuthSecret
       record.sources.sort_by(&:role).filter_map { |s| source_segment(s, role: s.role) }
     else
       []
@@ -135,6 +137,7 @@ class ConsoleController < ApplicationController
     case record
     when StaticSecret  then static_injection(record)
     when GcpAuthSecret  then "Authorization: Bearer"
+    when AwsAuthSecret  then "Authorization: AWS4-HMAC-SHA256"
     when OauthTokenSecret
       header = record.header.presence || "Authorization"
       prefix = record.value_prefix.presence&.strip
