@@ -10,6 +10,7 @@
   - [Request rules](#request-rules)
 - [Static secrets](#static-secrets)
 - [GCP auth secrets](#gcp-auth-secrets)
+- [AWS auth secrets](#aws-auth-secrets)
 - [OAuth token secrets](#oauth-token-secrets)
 - [PG DSN secrets](#pg-dsn-secrets)
 - [HMAC secrets](#hmac-secrets)
@@ -349,6 +350,93 @@ Returns `201`. Response shape:
 | `GET`  | `/api/v1/gcp_auth_secrets/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
 | `PUT`/`PATCH` | `/api/v1/gcp_auth_secrets/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`; same body as create. |
 | `DELETE` | `/api/v1/gcp_auth_secrets/:id` | Delete. Returns `204`; `404` if missing. Cascades: the secret's sources, rules, and any grants that reference it are removed. The granted roles and principals are not deleted. |
+
+## AWS auth secrets
+
+An AWS auth secret re-signs matching outbound requests with AWS SigV4. The workload's AWS SDK signs each request with throwaway placeholder credentials; `iron-proxy` strips that signature and re-signs with the real credentials, so the real keys never reach the workload. Each AWS credential is its own [secret source](#secret-sources): `access_key_id` and `secret_access_key` are required, and `session_token` is optional for temporary/STS credentials. `allowed_regions` and `allowed_services` scope what the proxy will sign for. At least one [rule](#request-rules) is required.
+
+Each granted AWS auth secret is delivered to `iron-proxy` as its own `aws_auth` transform with its own rules (like a [GCP auth secret](#gcp-auth-secrets), and unlike OAuth token secrets, which are bundled).
+
+### Attributes
+
+| Field               | In requests | Notes |
+| ------------------- | ----------- | ----- |
+| `namespace`         | optional    | Defaults to `"default"`. Immutable. |
+| `foreign_id`        | optional    | Unique per namespace. Immutable. |
+| `name`, `description` | optional  | |
+| `labels`            | optional    | Object; defaults to `{}`. |
+| `allowed_regions`   | optional    | Array of non-empty strings; defaults to `[]` (no region scoping). |
+| `allowed_services`  | optional    | Array of non-empty strings; defaults to `[]` (no service scoping). |
+| `access_key_id`     | required    | A [secret source](#secret-sources) resolving the AWS access key id. |
+| `secret_access_key` | required    | A [secret source](#secret-sources) resolving the AWS secret access key. |
+| `session_token`     | optional    | A [secret source](#secret-sources) resolving an STS session token, for temporary credentials. |
+| `rules`             | required    | At least one [rule](#request-rules). |
+
+### Create
+
+`POST /api/v1/aws_auth_secrets`
+
+```json
+{
+  "data": {
+    "namespace": "default",
+    "foreign_id": "cloudwatch-reader",
+    "name": "CloudWatch Reader",
+    "allowed_regions": ["us-west-2"],
+    "allowed_services": ["logs", "monitoring"],
+    "access_key_id": { "source_type": "aws_sm", "config": { "secret_id": "aws-access-key-id", "region": "us-west-2" } },
+    "secret_access_key": { "source_type": "aws_sm", "config": { "secret_id": "aws-secret-access-key", "region": "us-west-2" } },
+    "rules": [ { "host": "logs.us-west-2.amazonaws.com", "http_methods": ["POST"] } ]
+  }
+}
+```
+
+For temporary/STS credentials, include a `session_token` source as well:
+
+```json
+{
+  "data": {
+    "foreign_id": "cloudwatch-reader-sts",
+    "access_key_id": { "source_type": "env", "config": { "var": "AWS_ACCESS_KEY_ID" } },
+    "secret_access_key": { "source_type": "env", "config": { "var": "AWS_SECRET_ACCESS_KEY" } },
+    "session_token": { "source_type": "env", "config": { "var": "AWS_SESSION_TOKEN" } },
+    "rules": [ { "host": "logs.us-west-2.amazonaws.com", "http_methods": ["POST"] } ]
+  }
+}
+```
+
+Returns `201`. Response shape (each credential echoes its source as `{ source_type, config }`, never the underlying value; `session_token` is `null` when unset):
+
+```json
+{
+  "data": {
+    "id": "aas_...",
+    "namespace": "default",
+    "foreign_id": "cloudwatch-reader",
+    "name": "CloudWatch Reader",
+    "description": null,
+    "labels": {},
+    "allowed_regions": ["us-west-2"],
+    "allowed_services": ["logs", "monitoring"],
+    "access_key_id": { "source_type": "aws_sm", "config": { "secret_id": "aws-access-key-id", "region": "us-west-2" } },
+    "secret_access_key": { "source_type": "aws_sm", "config": { "secret_id": "aws-secret-access-key", "region": "us-west-2" } },
+    "session_token": null,
+    "rules": [ { "host": "logs.us-west-2.amazonaws.com", "cidr": null, "position": 0, "http_methods": ["POST"], "paths": [] } ],
+    "created_at": "2026-06-01T10:00:00Z",
+    "updated_at": "2026-06-01T10:00:00Z"
+  }
+}
+```
+
+### Other operations
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| `GET`  | `/api/v1/aws_auth_secrets?namespace=default` | List. |
+| `GET`  | `/api/v1/aws_auth_secrets/:id` | Fetch one. |
+| `GET`  | `/api/v1/aws_auth_secrets/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
+| `PUT`/`PATCH` | `/api/v1/aws_auth_secrets/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`; same body as create. Replaces the credential sources wholesale, so a `PUT` must resend `access_key_id` and `secret_access_key` (and `session_token`, to keep it). |
+| `DELETE` | `/api/v1/aws_auth_secrets/:id` | Delete. Returns `204`; `404` if missing. Cascades: the secret's sources, rules, and any grants that reference it are removed. The granted roles and principals are not deleted. |
 
 ## OAuth token secrets
 
@@ -899,7 +987,7 @@ A grant attaches exactly one secret to a **grantee** — either a principal or a
 
 ### Create
 
-`POST /api/v1/grants` — supply exactly one grantee (`principal_id` **or** `role_id`) plus exactly one of `static_secret_id`, `gcp_auth_secret_id`, `oauth_token_secret_id`, `pg_dsn_secret_id`, or `hmac_secret_id`:
+`POST /api/v1/grants` — supply exactly one grantee (`principal_id` **or** `role_id`) plus exactly one of `static_secret_id`, `gcp_auth_secret_id`, `aws_auth_secret_id`, `oauth_token_secret_id`, `pg_dsn_secret_id`, or `hmac_secret_id`:
 
 ```json
 { "data": { "principal_id": "prn_...", "static_secret_id": "ssr_..." } }
@@ -925,7 +1013,7 @@ Returns `201`. The response includes the one grantee key and the one secret-type
 }
 ```
 
-Referencing a missing grantee or secret returns `404`. Supplying no grantee returns `422` with `"must reference one of principal_id, role_id"`; supplying no secret returns `422` with `"must reference one of static_secret_id, gcp_auth_secret_id, oauth_token_secret_id, pg_dsn_secret_id, hmac_secret_id"`.
+Referencing a missing grantee or secret returns `404`. Supplying no grantee returns `422` with `"must reference one of principal_id, role_id"`; supplying no secret returns `422` with `"must reference one of static_secret_id, gcp_auth_secret_id, aws_auth_secret_id, oauth_token_secret_id, pg_dsn_secret_id, hmac_secret_id"`.
 
 ### List by grantee
 
@@ -1156,7 +1244,7 @@ Notes on the proxy-sync payload, which differs from the REST representation:
 - `status` is `assigned` or `unassigned`, and `principal_id` is the assigned principal (or `null`). An unassigned proxy gets a valid response with `status: "unassigned"` and empty `secrets`/`transforms`, which is distinct from an assigned proxy whose config is genuinely empty. These fields appear only in the full payload (not the hash-only response).
 - The config hash incorporates the principal assignment, so assigning, swapping, or clearing the principal always changes the hash and the proxy refetches. A swap is a full replacement: the proxy should drop the previously delivered config rather than merge.
 - The delivered config covers the proxy's principal's **effective grants**: secrets granted to the principal directly plus those granted to any [role](#roles) it holds. A secret reachable through more than one path appears once.
-- `secrets` carries one entry per granted static secret that has a source (sourceless static secrets are skipped). `transforms` carries one `gcp_auth` transform per granted GCP auth secret, one `hmac_sign` transform per granted HMAC secret, and a single bundled `oauth_token` transform whose `config.tokens` lists every granted OAuth token secret. An `hmac_sign` transform omits `allow_chunked_body` when it is `false`.
+- `secrets` carries one entry per granted static secret that has a source (sourceless static secrets are skipped). `transforms` carries one `gcp_auth` transform per granted GCP auth secret, one `aws_auth` transform per granted AWS auth secret, one `hmac_sign` transform per granted HMAC secret, and a single bundled `oauth_token` transform whose `config.tokens` lists every granted OAuth token secret. An `hmac_sign` transform omits `allow_chunked_body` when it is `false`.
 - `postgres` carries one entry per granted PG DSN secret, keyed by `foreign_id` (the key a proxy-local listener binds to), with the opaque `id` alongside it. `database` and `role` are omitted when blank.
 - Each source is flattened: its `config` keys are merged up and tagged with `type` (the `source_type`). A `control_plane` source delivers its decrypted value inline as `value`.
 - Rules use `methods` here, versus `http_methods` in the REST API. Blank rule fields are omitted.
