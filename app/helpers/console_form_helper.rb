@@ -17,4 +17,28 @@ module ConsoleFormHelper
     return "" if record.nil?
     record.errors[attr].present? ? "form-input-error" : ""
   end
+
+  # Flat list of human messages for the form's error summary. Nested source/rule
+  # records are saved via autosave, which adds only a generic "is invalid" on the
+  # parent for the association; we drop those and surface the children's own
+  # detailed messages, prefixed by which record they came from.
+  def secret_error_messages(secret)
+    nested_attrs = %i[source dsn_source rules]
+    messages = secret.errors.reject { |e| nested_attrs.include?(e.attribute) }.map(&:full_message)
+
+    %i[source dsn_source].each do |assoc|
+      next unless secret.respond_to?(assoc)
+      child = secret.public_send(assoc)
+      next unless child&.errors&.any?
+      child.errors.full_messages.each { |m| messages << "Source: #{m}" }
+    end
+
+    if secret.respond_to?(:rules)
+      secret.rules.each_with_index do |rule, i|
+        rule.errors.full_messages.each { |m| messages << "Rule #{i + 1}: #{m}" }
+      end
+    end
+
+    messages
+  end
 end

@@ -1,6 +1,8 @@
 require "test_helper"
 
 module Console
+  # Covers the per-type secret form controllers (StaticSecrets, PgDsnSecrets) and
+  # their shared base flow.
   class SecretsControllerTest < ActionDispatch::IntegrationTest
     setup do
       @operator = users(:acme_admin)
@@ -11,28 +13,28 @@ module Console
 
     test "redirects to login when not signed in" do
       delete logout_url
-      get new_console_secret_url("static")
+      get new_console_static_secret_url
       assert_redirected_to login_path
     end
 
-    test "a kind without a form is not found" do
-      get new_console_secret_url("hmac")
+    test "a kind without a form has no route and 404s" do
+      get "/console/secrets/hmac/new"
       assert_response :not_found
     end
 
     # --- static: new / create --------------------------------------------
 
     test "GET new renders the static form" do
-      get new_console_secret_url("static")
+      get new_console_static_secret_url
       assert_response :ok
-      assert_select "form[action=?]", console_secrets_create_path("static")
+      assert_select "form[action=?]", console_static_secrets_path
     end
 
     test "POST create builds a static secret with a source and rules" do
       assert_difference -> { StaticSecret.count } => 1,
                         -> { SecretSource.count } => 1,
                         -> { RequestRule.count } => 2 do
-        post console_secrets_create_url("static"), params: {
+        post console_static_secrets_url, params: {
           secret: { namespace: "acme", name: "ui-static", foreign_id: "ui-static" },
           static: { mode: "inject", header: "Authorization", formatter: "Bearer {{ .Value }}" },
           source: { source_type: "env", reference: "UI_TOKEN" },
@@ -56,7 +58,7 @@ module Console
 
     test "POST create with no inject or replace re-renders with errors and writes nothing" do
       assert_no_difference [ "StaticSecret.count", "SecretSource.count", "RequestRule.count" ] do
-        post console_secrets_create_url("static"), params: {
+        post console_static_secrets_url, params: {
           secret: { namespace: "acme", name: "broken" },
           static: { mode: "inject" },
           source: { source_type: "env", reference: "X" }
@@ -68,7 +70,7 @@ module Console
 
     test "POST create surfaces a nested rule error" do
       assert_no_difference [ "StaticSecret.count", "RequestRule.count" ] do
-        post console_secrets_create_url("static"), params: {
+        post console_static_secrets_url, params: {
           secret: { namespace: "acme", name: "bad-rule" },
           static: { mode: "inject", header: "Authorization" },
           rules: { "0" => { host: "h.example.com", cidr: "10.0.0.0/8" } }
@@ -82,20 +84,20 @@ module Console
 
     test "GET edit renders the form prefilled" do
       secret = static_secrets(:acme_prod_api_key)
-      get edit_console_secret_url("static", secret.oid)
+      get edit_console_static_secret_url(secret.oid)
       assert_response :ok
       assert_select "input[name=?][value=?]", "secret[foreign_id]", secret.foreign_id
     end
 
     test "edit renders rule methods as selected chips and paths as tokens" do
-      post console_secrets_create_url("static"), params: {
+      post console_static_secrets_url, params: {
         secret: { namespace: "acme", foreign_id: "chip-render" },
         static: { mode: "inject", header: "Authorization" },
         rules: { "0" => { host: "api.example.com", http_methods: "get, post", paths: "/v1/*" } }
       }
       secret = StaticSecret.find_by!(namespace: "acme", foreign_id: "chip-render")
 
-      get edit_console_secret_url("static", secret.oid)
+      get edit_console_static_secret_url(secret.oid)
       assert_response :ok
       assert_select "input[name=?][value=?]", "rules[0][http_methods]", "GET,POST"
       assert_select "button.chip-on[data-method=?]", "GET"
@@ -105,7 +107,7 @@ module Console
     end
 
     test "invalid create marks the offending field and renders an inline error" do
-      post console_secrets_create_url("static"), params: {
+      post console_static_secrets_url, params: {
         secret: { namespace: "bad namespace" },
         static: { mode: "inject", header: "Authorization" }
       }
@@ -116,7 +118,7 @@ module Console
 
     test "PATCH update changes attributes and replaces rules" do
       secret = static_secrets(:github_token_inject)
-      patch console_secret_update_url("static", secret.oid), params: {
+      patch console_static_secret_url(secret.oid), params: {
         secret: { namespace: secret.namespace, name: "renamed" },
         static: { mode: "inject", header: "X-Token" },
         source: { source_type: "env", reference: "NEW_VAR" },
@@ -133,14 +135,14 @@ module Console
     # --- pg_dsn: create / update -----------------------------------------
 
     test "GET new renders the pg_dsn form" do
-      get new_console_secret_url("pg_dsn")
+      get new_console_pg_dsn_secret_url
       assert_response :ok
       assert_select "input[name=?]", "secret[database]"
     end
 
     test "POST create builds a pg_dsn secret with an inline DSN source" do
       assert_difference -> { PgDsnSecret.count } => 1, -> { SecretSource.count } => 1 do
-        post console_secrets_create_url("pg_dsn"), params: {
+        post console_pg_dsn_secrets_url, params: {
           secret: { namespace: "acme", foreign_id: "ui-shop", database: "shop", role: "readonly" },
           source: { source_type: "control_plane", secret: "postgres://u:p@db.example:5432/shop" }
         }
@@ -153,7 +155,7 @@ module Console
 
     test "POST create rejects a database that mismatches the inline DSN" do
       assert_no_difference [ "PgDsnSecret.count", "SecretSource.count" ] do
-        post console_secrets_create_url("pg_dsn"), params: {
+        post console_pg_dsn_secrets_url, params: {
           secret: { namespace: "acme", foreign_id: "ui-mismatch", database: "wrong" },
           source: { source_type: "control_plane", secret: "postgres://u:p@db.example/shop" }
         }
@@ -164,7 +166,7 @@ module Console
 
     test "POST create requires foreign_id and database for pg_dsn" do
       assert_no_difference "PgDsnSecret.count" do
-        post console_secrets_create_url("pg_dsn"), params: {
+        post console_pg_dsn_secrets_url, params: {
           secret: { namespace: "acme" },
           source: { source_type: "env", reference: "PG_DSN" }
         }
@@ -174,7 +176,7 @@ module Console
 
     test "PATCH update changes the pg_dsn database and source" do
       secret = pg_dsn_secrets(:acme_reporting_pg)
-      patch console_secret_update_url("pg_dsn", secret.oid), params: {
+      patch console_pg_dsn_secret_url(secret.oid), params: {
         secret: { namespace: secret.namespace, foreign_id: secret.foreign_id, database: "reporting", role: "" },
         source: { source_type: "env", reference: "REPORTING_DSN" }
       }

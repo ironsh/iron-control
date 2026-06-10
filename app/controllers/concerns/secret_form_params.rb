@@ -1,12 +1,10 @@
-# Translates the console secret forms' params into the secret object graph. The
-# forms post flat, type-agnostic param groups (`secret`, `source`, `rules`,
-# `labels`, plus the static-only `static`); this concern folds them onto a secret
-# model and its associated SecretSource / RequestRule records, which a single
-# `secret.save` then validates and persists atomically (autosave cascades).
+# Shared helpers for turning the console secret forms' params into a secret's
+# common attributes and its associated SecretSource / RequestRule records. The
+# per-type controllers compose these with their own config building; nothing here
+# is type-specific.
 #
 # Nothing here saves: the controller owns the save so it can re-render with the
-# model's own validation errors on failure. The rule and source helpers are the
-# reusable pieces shared by every rule/source-bearing secret kind.
+# model's own validation errors on failure.
 module SecretFormParams
   extend ActiveSupport::Concern
 
@@ -23,30 +21,6 @@ module SecretFormParams
     sp[:foreign_id] = sp[:foreign_id].presence
     secret.assign_attributes(sp)
     secret.labels = parse_labels
-  end
-
-  # StaticSecret: an inject/replace config (exactly one, enforced by the model),
-  # one optional source, and any number of request rules.
-  def assign_static(secret)
-    st = params.fetch(:static, ActionController::Parameters.new)
-    if st[:mode] == "replace"
-      secret.inject_config = nil
-      secret.replace_config = build_replace_config(st)
-    else
-      secret.replace_config = nil
-      secret.inject_config = build_inject_config(st)
-    end
-    assign_source(secret, :source)
-    assign_rules(secret)
-  end
-
-  # PgDsnSecret: a required database routing key, optional upstream role, and a
-  # single DSN source (no rules).
-  def assign_pg_dsn(secret)
-    pg = params.fetch(:secret, ActionController::Parameters.new).permit(:database, :role)
-    secret.database = pg[:database].presence
-    secret.role = pg[:role].presence
-    assign_source(secret, :dsn_source)
   end
 
   # Build the request rules from the indexed `rules` param onto the secret,
@@ -88,25 +62,6 @@ module SecretFormParams
     attrs[:config] = config
 
     secret.public_send("#{assoc}=", SecretSource.new(attrs))
-  end
-
-  def build_inject_config(st)
-    cfg = {}
-    cfg["header"] = st[:header].strip if st[:header].present?
-    cfg["query_param"] = st[:query_param].strip if st[:query_param].present?
-    cfg["formatter"] = st[:formatter] if st[:formatter].present?
-    cfg.presence
-  end
-
-  def build_replace_config(st)
-    cfg = { "proxy_value" => st[:proxy_value].to_s }
-    headers = split_list(st[:match_headers])
-    cfg["match_headers"] = headers if headers.any?
-    cfg["match_body"] = true if boolean(st[:match_body])
-    cfg["match_path"] = true if boolean(st[:match_path])
-    cfg["match_query"] = true if boolean(st[:match_query])
-    cfg["require"] = true if boolean(st[:require])
-    cfg
   end
 
   def parse_labels
