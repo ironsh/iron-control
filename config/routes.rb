@@ -19,6 +19,12 @@ Rails.application.routes.draw do
   get "console/principals", to: "console#principals", as: :console_principals
   get "console/principals/:id", to: "console#principal", as: :console_principal
   get "console/secrets", to: "console#secrets", as: :console_secrets
+  # One controller per secret kind for the create/edit forms. Declared before the
+  # show route so their paths win over the generic `:kind/:id` match.
+  namespace :console do
+    resources :static_secrets, only: %i[new create edit update], path: "secrets/static"
+    resources :pg_dsn_secrets, only: %i[new create edit update], path: "secrets/pg_dsn"
+  end
   get "console/secrets/:kind/:id", to: "console#secret", as: :console_secret
   get "console/credentials", to: "console#credentials", as: :console_credentials
   get "console/credentials/:id", to: "console#credential", as: :console_credential

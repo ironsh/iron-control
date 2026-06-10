@@ -1,0 +1,31 @@
+<%= form_with model: [ :console, secret ], data: { turbo: false } do %>
+  <div class="space-y-6">
+    <%= render "identity_fields", secret: secret, foreign_id_required: true %>
+
+    <section class="form-section">
+      <h2 class="form-section-heading">Postgres Upstream</h2>
+      <div class="grid gap-5 sm:grid-cols-2">
+        <div>
+          <label class="form-label" for="secret_database">Database *</label>
+          <%= text_field_tag "secret[database]", secret.database, id: "secret_database", class: "form-input #{field_error_class(secret, :database)}", placeholder: "analytics" %>
+          <%= field_error(secret, :database) %>
+          <p class="form-hint">The routing key clients connect to. Must match the DSN's database for an inline DSN.</p>
+        </div>
+        <div>
+          <label class="form-label" for="secret_role">Role (optional)</label>
+          <%= text_field_tag "secret[role]", secret.role, id: "secret_role", class: "form-input #{field_error_class(secret, :role)}" %>
+          <%= field_error(secret, :role) %>
+          <p class="form-hint">SET ROLE applied to the upstream session.</p>
+        </div>
+      </div>
+    </section>
+
+    <%= render "source_fields", secret: secret, source: secret.dsn_source, heading: "DSN Source" %>
+    <%= render "labels_fields", secret: secret %>
+
+    <div class="flex items-center gap-3">
+      <%= submit_tag(secret.new_record? ? "Create secret" : "Save changes", class: "btn-primary") %>
+      <a href="<%= console_secrets_path %>" class="btn-secondary">Cancel</a>
+    </div>
+  </div>
+<% end %>
