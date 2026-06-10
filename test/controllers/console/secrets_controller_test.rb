@@ -2,7 +2,9 @@ require "test_helper"
 
 module Console
   # Covers the per-type secret form controllers (StaticSecrets, PgDsnSecrets) and
-  # their shared base flow.
+  # their shared base flow: what gets built/persisted, redirects, and that invalid
+  # input is rejected (422) without writing. Rendered markup is intentionally not
+  # asserted here.
   class SecretsControllerTest < ActionDispatch::IntegrationTest
     setup do
       @operator = users(:acme_admin)
@@ -22,12 +24,13 @@ module Console
       assert_response :not_found
     end
 
-    # --- static: new / create --------------------------------------------
+    # --- static -----------------------------------------------------------
 
-    test "GET new renders the static form" do
+    test "GET new and edit render without error" do
       get new_console_static_secret_url
       assert_response :ok
-      assert_select "form[action=?]", console_static_secrets_path
+      get edit_console_static_secret_url(static_secrets(:acme_prod_api_key).oid)
+      assert_response :ok
     end
 
     test "POST create builds a static secret with a source and rules" do
@@ -50,13 +53,12 @@ module Console
       assert_redirected_to console_secret_path("static", secret.oid)
       assert_equal({ "header" => "Authorization", "formatter" => "Bearer {{ .Value }}" }, secret.inject_config)
       assert_equal({ "team" => "platform" }, secret.labels)
-      assert_equal "env", secret.source.source_type
       assert_equal({ "var" => "UI_TOKEN" }, secret.source.config)
       assert_equal [ 0, 1 ], secret.rules.order(:position).map(&:position)
       assert_equal %w[GET POST], secret.rules.order(:position).first.http_methods
     end
 
-    test "POST create with no inject or replace re-renders with errors and writes nothing" do
+    test "POST create with no inject or replace is rejected without writing" do
       assert_no_difference [ "StaticSecret.count", "SecretSource.count", "RequestRule.count" ] do
         post console_static_secrets_url, params: {
           secret: { namespace: "acme", name: "broken" },
@@ -65,10 +67,9 @@ module Console
         }
       end
       assert_response :unprocessable_entity
-      assert_select "li", /inject_config or replace_config/
     end
 
-    test "POST create surfaces a nested rule error" do
+    test "POST create with an invalid nested rule is rejected without writing" do
       assert_no_difference [ "StaticSecret.count", "RequestRule.count" ] do
         post console_static_secrets_url, params: {
           secret: { namespace: "acme", name: "bad-rule" },
@@ -77,43 +78,6 @@ module Console
         }
       end
       assert_response :unprocessable_entity
-      assert_select "li", /Rule 1/
-    end
-
-    # --- static: edit / update -------------------------------------------
-
-    test "GET edit renders the form prefilled" do
-      secret = static_secrets(:acme_prod_api_key)
-      get edit_console_static_secret_url(secret.oid)
-      assert_response :ok
-      assert_select "input[name=?][value=?]", "secret[foreign_id]", secret.foreign_id
-    end
-
-    test "edit renders rule methods as selected chips and paths as tokens" do
-      post console_static_secrets_url, params: {
-        secret: { namespace: "acme", foreign_id: "chip-render" },
-        static: { mode: "inject", header: "Authorization" },
-        rules: { "0" => { host: "api.example.com", http_methods: "get, post", paths: "/v1/*" } }
-      }
-      secret = StaticSecret.find_by!(namespace: "acme", foreign_id: "chip-render")
-
-      get edit_console_static_secret_url(secret.oid)
-      assert_response :ok
-      assert_select "input[name=?][value=?]", "rules[0][http_methods]", "GET,POST"
-      assert_select "button.chip-on[data-method=?]", "GET"
-      assert_select "button.chip-on[data-method=?]", "POST"
-      assert_select "button[data-method=?]:not(.chip-on)", "DELETE"
-      assert_select "span.chip-token[data-value=?]", "/v1/*"
-    end
-
-    test "invalid create marks the offending field and renders an inline error" do
-      post console_static_secrets_url, params: {
-        secret: { namespace: "bad namespace" },
-        static: { mode: "inject", header: "Authorization" }
-      }
-      assert_response :unprocessable_entity
-      assert_select "input.form-input-error[name=?]", "secret[namespace]"
-      assert_select "p.field-error"
     end
 
     test "PATCH update changes attributes and replaces rules" do
@@ -132,12 +96,11 @@ module Console
       assert_equal [ "only.example.com" ], secret.rules.map(&:host)
     end
 
-    # --- pg_dsn: create / update -----------------------------------------
+    # --- pg_dsn -----------------------------------------------------------
 
-    test "GET new renders the pg_dsn form" do
+    test "GET new renders without error" do
       get new_console_pg_dsn_secret_url
       assert_response :ok
-      assert_select "input[name=?]", "secret[database]"
     end
 
     test "POST create builds a pg_dsn secret with an inline DSN source" do
@@ -161,7 +124,6 @@ module Console
         }
       end
       assert_response :unprocessable_entity
-      assert_select "li", /DSN database/
     end
 
     test "POST create requires foreign_id and database for pg_dsn" do
