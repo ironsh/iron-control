@@ -2,28 +2,9 @@
 # their effective grants, and secrets. Read-only; gated behind a console session
 # via ApplicationController#require_login. Distinct from the JSON API.
 class ConsoleController < ApplicationController
+  include SecretKinds
+
   layout "console"
-
-  # The four grantable secret kinds, keyed by a short slug used in the UI. The
-  # `includes` association is eager-loaded so the source/injection columns don't
-  # trigger a query per row.
-  SECRET_KINDS = {
-    "static" => { model: StaticSecret, label: "Static", includes: :source },
-    "gcp_auth" => { model: GcpAuthSecret, label: "GCP Auth", includes: :keyfile_source },
-    "aws_auth" => { model: AwsAuthSecret, label: "AWS Auth", includes: :sources },
-    "oauth_token" => { model: OauthTokenSecret, label: "OAuth Token", includes: :sources },
-    "pg_dsn" => { model: PgDsnSecret, label: "Postgres DSN", includes: :dsn_source },
-    "hmac" => { model: HmacSecret, label: "HMAC", includes: :sources }
-  }.freeze
-
-  # The config key that carries a source's human-meaningful reference, per
-  # source_type. control_plane keeps its value inline (and redacted), so it has
-  # no reference key.
-  SOURCE_REF_KEYS = {
-    "env" => "var", "aws_sm" => "secret_id", "aws_ssm" => "name",
-    "1password" => "secret_ref", "1password_connect" => "secret_ref",
-    "token_broker" => "credential_id"
-  }.freeze
 
   # Friendly labels for the source backend (and the gcp_auth credentials_provider
   # type). The secrets table shows only this -- the full reference lives on the
@@ -81,11 +62,6 @@ class ConsoleController < ApplicationController
     @credential = BrokerCredential.find_by_oid!(params[:id])
   rescue ActiveRecord::RecordNotFound
     render plain: "credential not found", status: :not_found
-  end
-
-  helper_method :secret_kind_label
-  def secret_kind_label(slug)
-    SECRET_KINDS.dig(slug, :label) || slug
   end
 
   # Where a secret's value is resolved from, as a list of segments. Each segment
