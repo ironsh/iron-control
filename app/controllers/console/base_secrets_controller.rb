@@ -1,29 +1,26 @@
 module Console
-  # Shared new/create/edit/update flow for the per-type secret form controllers.
-  # A subclass declares its #model and #kind and implements #assign_form to fold
-  # the type-specific params onto the secret; this base owns identity/labels, the
-  # save, and rendering of the shared form templates. Forms build the model graph
-  # directly and lean on the model's own validations, re-rendering with inline
-  # errors when a save fails.
+  # Shared skeleton for the per-type secret form controllers: the new/create/edit/
+  # update actions, view resolution, and the parts every secret has regardless of
+  # kind (identity + labels, and building its SecretSource). A subclass declares
+  # its #model and #kind and implements #assign_form for the type-specific config,
+  # source association, and (where applicable) rules.
   class BaseSecretsController < ApplicationController
     include SecretKinds
-    include SecretFormParams
 
     layout "console"
 
     before_action :assign_kind
     before_action :set_secret, only: %i[edit update]
 
-    # The shared form templates and partials live under app/views/console/secrets,
-    # but each subclass's controller path is console/<type>_secrets. Add that
-    # shared prefix to the view lookup so bare template/partial names resolve there.
+    # The shared form templates/partials live under app/views/console/secrets, but
+    # each subclass's controller path is console/<type>_secrets; add that prefix so
+    # bare template/partial names resolve there.
     def _prefixes
       @_prefixes ||= super + %w[console/secrets]
     end
 
     def new
       @secret = model.new(namespace: "default")
-      render :new
     end
 
     def create
@@ -36,9 +33,7 @@ module Console
       end
     end
 
-    def edit
-      render :edit
-    end
+    def edit; end
 
     def update
       assign(@secret)
@@ -51,8 +46,6 @@ module Console
 
     private
 
-    # --- subclass responsibilities ---------------------------------------
-
     def model
       raise NotImplementedError, "#{self.class} must define #model"
     end
@@ -61,17 +54,57 @@ module Console
       raise NotImplementedError, "#{self.class} must define #kind"
     end
 
-    # Fold the type-specific config/source/rules onto the secret. Identity and
-    # labels are already applied by the time this runs.
     def assign_form(_secret)
       raise NotImplementedError, "#{self.class} must define #assign_form"
     end
 
-    # --- shared flow ------------------------------------------------------
-
     def assign(secret)
-      assign_common_attributes(secret)
+      assign_identity(secret)
       assign_form(secret)
+    end
+
+    # namespace / foreign_id / name / description / labels — common to every kind.
+    # A blank namespace defaults to "default"; a blank foreign_id becomes nil so
+    # the allow_nil validations apply (an empty string would fail the URL-safe
+    # format).
+    def assign_identity(secret)
+      attrs = params.fetch(:secret, ActionController::Parameters.new)
+              .permit(:namespace, :foreign_id, :name, :description)
+      attrs[:namespace] = attrs[:namespace].presence || "default"
+      attrs[:foreign_id] = attrs[:foreign_id].presence
+      secret.assign_attributes(attrs)
+      secret.labels = label_params
+    end
+
+    def label_params
+      rows = params[:labels]
+      return {} if rows.blank?
+      rows.to_unsafe_h.values.each_with_object({}) do |row, acc|
+        key = row["key"].to_s.strip
+        acc[key] = row["value"].to_s if key.present?
+      end
+    end
+
+    # Build the SecretSource described by the `source` params, or nil when no
+    # backend was chosen. The subclass assigns it to the right has_one association
+    # (source / dsn_source).
+    def build_source
+      sp = params.fetch(:source, ActionController::Parameters.new)
+      type = sp[:source_type].presence
+      return nil if type.nil?
+
+      config = {}
+      attrs = { source_type: type }
+      if type == "control_plane"
+        attrs[:secret] = sp[:secret]
+      elsif (ref_key = SOURCE_REF_KEYS[type])
+        config[ref_key] = sp[:reference].strip if sp[:reference].present?
+      end
+      config["region"] = sp[:region].strip if sp[:region].present? && %w[aws_sm aws_ssm].include?(type)
+      config["json_key"] = sp[:json_key].strip if sp[:json_key].present?
+      attrs[:config] = config
+
+      SecretSource.new(attrs)
     end
 
     def assign_kind

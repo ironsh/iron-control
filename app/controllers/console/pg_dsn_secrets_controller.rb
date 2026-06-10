@@ -16,7 +16,7 @@ module Console
       pg = params.fetch(:secret, ActionController::Parameters.new).permit(:database, :role)
       secret.database = pg[:database].presence
       secret.role = pg[:role].presence
-      assign_source(secret, :dsn_source)
+      secret.dsn_source = build_source
     end
   end
 end
