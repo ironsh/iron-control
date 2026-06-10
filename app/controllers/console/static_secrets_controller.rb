@@ -15,6 +15,7 @@ module Console
     end
 
     def assign_form(secret)
+      assign_identity(secret)
       st = params.fetch(:static, ActionController::Parameters.new)
       if st[:mode] == "replace"
         secret.inject_config = nil

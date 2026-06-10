@@ -1,8 +1,8 @@
 module Console
   # Shared skeleton for the per-type secret form controllers: the new/create/edit/
-  # update actions, view resolution, and the parts every secret has regardless of
-  # kind (identity + labels, and building its SecretSource). A subclass declares
-  # its #model and #kind and implements #assign_form for the type-specific config,
+  # update actions, view resolution, and the request mapping every secret shares
+  # (identity + labels, and building its SecretSource). A subclass declares its
+  # #model and #kind and implements #assign_form for the type-specific config,
   # source association, and (where applicable) rules.
   class BaseSecretsController < ApplicationController
     include SecretKinds
@@ -12,20 +12,13 @@ module Console
     before_action :assign_kind
     before_action :set_secret, only: %i[edit update]
 
-    # The shared form templates/partials live under app/views/console/secrets, but
-    # each subclass's controller path is console/<type>_secrets; add that prefix so
-    # bare template/partial names resolve there.
-    def _prefixes
-      @_prefixes ||= super + %w[console/secrets]
-    end
-
     def new
       @secret = model.new(namespace: "default")
     end
 
     def create
       @secret = model.new(created_by: current_user)
-      assign(@secret)
+      assign_form(@secret)
       if @secret.save
         redirect_to console_secret_path(kind, @secret.oid), notice: "Secret created."
       else
@@ -36,7 +29,7 @@ module Console
     def edit; end
 
     def update
-      assign(@secret)
+      assign_form(@secret)
       if @secret.save
         redirect_to console_secret_path(kind, @secret.oid), notice: "Secret updated."
       else
@@ -58,36 +51,27 @@ module Console
       raise NotImplementedError, "#{self.class} must define #assign_form"
     end
 
-    def assign(secret)
-      assign_identity(secret)
-      assign_form(secret)
-    end
-
-    # namespace / foreign_id / name / description / labels — common to every kind.
-    # A blank namespace defaults to "default"; a blank foreign_id becomes nil so
-    # the allow_nil validations apply (an empty string would fail the URL-safe
-    # format).
+    # namespace / foreign_id / name / description / labels. A blank namespace
+    # defaults to "default"; a blank foreign_id becomes nil so the allow_nil
+    # validations apply (an empty string would fail the URL-safe format).
     def assign_identity(secret)
-      attrs = params.fetch(:secret, ActionController::Parameters.new)
-              .permit(:namespace, :foreign_id, :name, :description)
-      attrs[:namespace] = attrs[:namespace].presence || "default"
-      attrs[:foreign_id] = attrs[:foreign_id].presence
-      secret.assign_attributes(attrs)
+      fields = params.fetch(:secret, ActionController::Parameters.new)
+               .permit(:namespace, :foreign_id, :name, :description)
+      fields[:namespace] = fields[:namespace].presence || "default"
+      fields[:foreign_id] = fields[:foreign_id].presence
+      secret.assign_attributes(fields)
       secret.labels = label_params
     end
 
     def label_params
-      rows = params[:labels]
-      return {} if rows.blank?
-      rows.to_unsafe_h.values.each_with_object({}) do |row, acc|
+      (params[:labels]&.to_unsafe_h || {}).values.each_with_object({}) do |row, acc|
         key = row["key"].to_s.strip
         acc[key] = row["value"].to_s if key.present?
       end
     end
 
-    # Build the SecretSource described by the `source` params, or nil when no
-    # backend was chosen. The subclass assigns it to the right has_one association
-    # (source / dsn_source).
+    # The SecretSource described by the `source` params, or nil when no backend was
+    # chosen. The subclass assigns it to its has_one association (source/dsn_source).
     def build_source
       sp = params.fetch(:source, ActionController::Parameters.new)
       type = sp[:source_type].presence

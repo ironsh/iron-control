@@ -13,6 +13,7 @@ module Console
     end
 
     def assign_form(secret)
+      assign_identity(secret)
       pg = params.fetch(:secret, ActionController::Parameters.new).permit(:database, :role)
       secret.database = pg[:database].presence
       secret.role = pg[:role].presence
