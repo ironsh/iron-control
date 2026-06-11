@@ -23,10 +23,10 @@ module ConsoleFormHelper
   # parent for the association; we drop those and surface the children's own
   # detailed messages, prefixed by which record they came from.
   def secret_error_messages(secret)
-    nested_attrs = %i[source dsn_source rules]
+    nested_attrs = %i[source dsn_source keyfile_source rules]
     messages = secret.errors.reject { |e| nested_attrs.include?(e.attribute) }.map(&:full_message)
 
-    %i[source dsn_source].each do |assoc|
+    %i[source dsn_source keyfile_source].each do |assoc|
       next unless secret.respond_to?(assoc)
       child = secret.public_send(assoc)
       next unless child&.errors&.any?

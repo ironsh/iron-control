@@ -147,5 +147,88 @@ module Console
       assert_nil secret.role.presence
       assert_equal "REPORTING_DSN", secret.dsn_source.config["var"]
     end
+
+    # --- gcp_auth ---------------------------------------------------------
+
+    test "GET new and edit render without error for gcp_auth" do
+      get new_console_gcp_auth_secret_url
+      assert_response :ok
+      get edit_console_gcp_auth_secret_url(gcp_auth_secrets(:acme_gcs_keyfile).oid)
+      assert_response :ok
+    end
+
+    test "POST create builds a keyfile gcp_auth secret with a source and rules" do
+      assert_difference -> { GcpAuthSecret.count } => 1,
+                        -> { SecretSource.count } => 1,
+                        -> { RequestRule.count } => 1 do
+        post console_gcp_auth_secrets_url, params: {
+          secret: { namespace: "acme", foreign_id: "ui-gcp-key", name: "ui-gcp" },
+          gcp: {
+            credential_mode: "keyfile",
+            subject: "bot@acme.example",
+            scopes: "https://www.googleapis.com/auth/cloud-platform\nhttps://www.googleapis.com/auth/devstorage.read_only"
+          },
+          source: { source_type: "env", reference: "GCP_KEY" },
+          rules: { "0" => { host: "storage.googleapis.com", http_methods: "GET", paths: "/" } }
+        }
+      end
+
+      secret = GcpAuthSecret.find_by!(namespace: "acme", foreign_id: "ui-gcp-key")
+      assert_redirected_to console_secret_path("gcp_auth", secret.oid)
+      assert_equal %w[https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/devstorage.read_only], secret.scopes
+      assert_equal "bot@acme.example", secret.subject
+      assert_nil secret.credentials_provider
+      assert_equal({ "var" => "GCP_KEY" }, secret.keyfile_source.config)
+      assert_equal [ "storage.googleapis.com" ], secret.rules.map(&:host)
+    end
+
+    test "POST create builds a workload-identity gcp_auth secret and ignores the source" do
+      assert_difference -> { GcpAuthSecret.count } => 1 do
+        assert_no_difference "SecretSource.count" do
+          post console_gcp_auth_secrets_url, params: {
+            secret: { namespace: "acme", foreign_id: "ui-gcp-wi" },
+            gcp: {
+              credential_mode: "workload_identity",
+              subject: "ignored@acme.example",
+              scopes: "https://www.googleapis.com/auth/cloud-platform"
+            },
+            source: { source_type: "env", reference: "SHOULD_BE_IGNORED" }
+          }
+        end
+      end
+
+      secret = GcpAuthSecret.find_by!(namespace: "acme", foreign_id: "ui-gcp-wi")
+      assert_redirected_to console_secret_path("gcp_auth", secret.oid)
+      assert_equal({ "type" => "workload_identity" }, secret.credentials_provider)
+      assert_nil secret.keyfile_source
+      assert_nil secret.subject
+    end
+
+    test "POST create gcp_auth without scopes is rejected without writing" do
+      assert_no_difference [ "GcpAuthSecret.count", "SecretSource.count" ] do
+        post console_gcp_auth_secrets_url, params: {
+          secret: { namespace: "acme", name: "no-scopes" },
+          gcp: { credential_mode: "keyfile", scopes: "" },
+          source: { source_type: "env", reference: "GCP_KEY" }
+        }
+      end
+      assert_response :unprocessable_entity
+    end
+
+    test "PATCH update switches a keyfile gcp_auth secret to workload identity" do
+      secret = gcp_auth_secrets(:acme_gcs_keyfile)
+      assert secret.keyfile_source.present?
+
+      patch console_gcp_auth_secret_url(secret.oid), params: {
+        secret: { namespace: secret.namespace, foreign_id: secret.foreign_id },
+        gcp: { credential_mode: "workload_identity", scopes: "https://www.googleapis.com/auth/cloud-platform" }
+      }
+
+      assert_redirected_to console_secret_path("gcp_auth", secret.oid)
+      secret.reload
+      assert_nil secret.keyfile_source
+      assert_nil secret.subject
+      assert_equal({ "type" => "workload_identity" }, secret.credentials_provider)
+    end
   end
 end
