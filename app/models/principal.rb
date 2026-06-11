@@ -98,7 +98,7 @@ class Principal < ApplicationRecord
   def sync_postgres
     granted_pg_dsn_secrets.filter_map do |pg|
       next unless pg.dsn_source
-      pg.to_proxy_dsn
+      pg.to_proxy_dsn(principal: self)
     end
   end
 

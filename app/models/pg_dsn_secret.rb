@@ -34,7 +34,7 @@ class PgDsnSecret < ApplicationRecord
   # `database`. The opaque id is carried too so the proxy can refer back to the
   # canonical resource (it ignores fields it does not use). The DSN reuses the
   # shared secrets source shape.
-  def to_proxy_dsn
+  def to_proxy_dsn(principal: nil)
     entry = {
       "id" => oid,
       "foreign_id" => foreign_id,
@@ -42,19 +42,22 @@ class PgDsnSecret < ApplicationRecord
       "dsn" => dsn_source&.to_proxy_source
     }
     entry["role"] = role if role.present?
-    entry["settings"] = proxy_settings if proxy_settings.present?
+    rendered_settings = proxy_settings(principal: principal)
+    entry["settings"] = rendered_settings if rendered_settings.present?
     entry
   end
 
   # The pinned session settings as the proxy expects them: an ordered array of
   # { "name", "value" } objects. Normalizes whatever shape was stored (string
-  # keys, blank rows) into the canonical form, dropping entries without a name.
-  def proxy_settings
+  # keys, blank rows) into the canonical form, dropping entries without a name,
+  # and renders principal-scoped placeholders when a principal is provided.
+  def proxy_settings(principal: nil)
     Array(settings).filter_map do |s|
       next unless s.is_a?(Hash)
       name = s["name"].presence || s[:name].presence
       next if name.blank?
-      { "name" => name, "value" => (s["value"] || s[:value]).to_s }
+      value = render_setting_value((s["value"] || s[:value]).to_s, principal)
+      { "name" => name, "value" => value }
     end
   end
 
@@ -71,6 +74,31 @@ class PgDsnSecret < ApplicationRecord
 
   def labels_is_a_hash
     errors.add(:labels, "must be a hash") unless labels.is_a?(Hash)
+  end
+
+  def render_setting_value(value, principal)
+    return value unless principal
+
+    value.gsub(/\{\{\s*([^{}]+?)\s*\}\}/) do
+      render_setting_expression(Regexp.last_match(1).strip, principal)
+    end
+  end
+
+  def render_setting_expression(expression, principal)
+    case expression
+    when ".Principal.Id", ".Principal.ID", ".Principal.Oid", ".Principal.OID"
+      principal.oid
+    when ".Principal.Namespace"
+      principal.namespace.to_s
+    when ".Principal.ForeignId", ".Principal.ForeignID"
+      principal.foreign_id.to_s
+    when ".Principal.Name"
+      principal.name.to_s
+    when /\A\.Principal\.Labels\.([A-Za-z0-9_.-]+)\z/
+      principal.labels.fetch(Regexp.last_match(1), "").to_s
+    else
+      ""
+    end
   end
 
   # Settings must be an array of { name, value } objects with valid, unique GUC

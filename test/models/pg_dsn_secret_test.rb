@@ -127,6 +127,43 @@ class PgDsnSecretTest < ActiveSupport::TestCase
     )
   end
 
+  test "to_proxy_dsn renders principal label setting values" do
+    principal = principals(:acme_channel)
+    principal.update!(labels: {
+      "slack_channel_id" => "C0123456789",
+      "centaur_slack_admin" => "true"
+    })
+    secret = with_dsn(PgDsnSecret.new(base_attrs(settings: [
+      {
+        "name" => "centaur.slack_channel_id",
+        "value" => "{{ .Principal.Labels.slack_channel_id }}"
+      },
+      {
+        "name" => "centaur.slack_admin",
+        "value" => "{{ .Principal.Labels.centaur_slack_admin }}"
+      },
+      { "name" => "centaur.principal", "value" => "{{ .Principal.ForeignId }}" }
+    ])))
+
+    assert_equal(
+      [
+        { "name" => "centaur.slack_channel_id", "value" => "C0123456789" },
+        { "name" => "centaur.slack_admin", "value" => "true" },
+        { "name" => "centaur.principal", "value" => principal.foreign_id }
+      ],
+      secret.to_proxy_dsn(principal: principal)["settings"]
+    )
+  end
+
+  test "to_proxy_dsn renders missing principal labels as empty strings" do
+    secret = with_dsn(PgDsnSecret.new(base_attrs(settings: [
+      { "name" => "centaur.slack_admin", "value" => "{{ .Principal.Labels.centaur_slack_admin }}" }
+    ])))
+
+    value = secret.to_proxy_dsn(principal: principals(:acme_channel)).dig("settings", 0, "value")
+    assert_equal "", value
+  end
+
   test "settings with a valid empty value are accepted and stringified" do
     secret = with_dsn(PgDsnSecret.new(base_attrs(settings: [ { "name" => "app.tenant", "value" => "" } ])))
     assert secret.valid?

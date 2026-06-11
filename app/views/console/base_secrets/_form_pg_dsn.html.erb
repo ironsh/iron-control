@@ -25,7 +25,7 @@
         <h2 class="form-section-heading mb-0">Session Settings</h2>
         <button type="button" data-action="nested-fields#add" class="btn-secondary">Add setting</button>
       </div>
-      <p class="form-hint mb-3">Pinned session variables (GUCs) the proxy SETs at session start, in order, before SET ROLE. Clients can't override them. Names must be a bare or dotted identifier (e.g. <code>app.tenant</code>); <code>role</code> and <code>session_authorization</code> are reserved.</p>
+      <p class="form-hint mb-3">Pinned session variables (GUCs) the proxy SETs at session start, in order, before SET ROLE. Clients can't override them. Names must be a bare or dotted identifier (e.g. <code>app.tenant</code>); <code>role</code> and <code>session_authorization</code> are reserved. Values may reference the assigned principal, e.g. <code>{{ .Principal.Labels.team }}</code>.</p>
 
       <div class="space-y-2" data-nested-fields-target="container">
         <% Array(secret.settings).each_with_index do |s, i| %>
