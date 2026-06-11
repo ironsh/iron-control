@@ -65,6 +65,14 @@ module OpaqueId
     "#{self.class.oid_prefix}_#{self.class.oid_encoder.encode([ id ])}"
   end
 
+  # Address records by their opaque id in generated URLs (form_with model:,
+  # polymorphic_path, *_path(record)), matching the find_by_oid! lookups the
+  # controllers use. Returns nil for an unsaved record so form_with still routes
+  # it to the create action.
+  def to_param
+    oid
+  end
+
   # Deterministically permutes the base alphabet using the prefix as a seed,
   # so each model gets a distinct encoding space. An id encoded under one
   # prefix will not decode to the same id under another.
