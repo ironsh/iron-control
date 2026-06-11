@@ -30,7 +30,6 @@ module Api
         row = json_body.fetch("data").first
         assert_equal "google", row["provider"]
         refute row.key?("client_secret")
-        assert row.key?("client_secret_set")
         refute row.key?("namespace")
         refute row.key?("foreign_id")
       end
@@ -43,7 +42,6 @@ module Api
         data = json_body.fetch("data")
         assert_equal "google", data["slug"]
         assert_equal "acme-google-client-id", data["client_id"]
-        assert_equal true, data["client_secret_set"]
         refute data.key?("client_secret")
       end
 
@@ -61,7 +59,6 @@ module Api
         data = json_body.fetch("data")
         assert_equal "google", data["provider"]
         assert_equal "api-google", data["slug"]
-        assert_equal true, data["client_secret_set"]
         refute data.key?("client_secret")
 
         created = OauthApp.find_by_oid(data["id"])

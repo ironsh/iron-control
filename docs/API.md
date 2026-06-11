@@ -855,11 +855,7 @@ Google is the only supported provider in this release. The `provider` field is v
 | `credential_namespace` | optional    | Namespace for credentials minted by this app's flows. Defaults to `"default"`. |
 | `enabled`              | optional    | Defaults to `true`. A disabled app rejects new consent flows; existing credentials keep refreshing. |
 
-Read-only fields:
-
-| Field               | Notes |
-| ------------------- | ----- |
-| `client_secret_set` | Whether a client secret is stored. The secret value itself is never returned. |
+The `client_secret` is required and write-only: it is accepted on writes but never returned in any response.
 
 ### Create
 
@@ -890,7 +886,6 @@ Returns `201`. The `client_secret` is never echoed back:
     "labels": {},
     "provider": "google",
     "client_id": "1234.apps.googleusercontent.com",
-    "client_secret_set": true,
     "allowed_scopes": ["https://www.googleapis.com/auth/gmail.readonly"],
     "credential_namespace": "default",
     "enabled": true,

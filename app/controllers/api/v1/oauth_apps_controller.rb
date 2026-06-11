@@ -2,8 +2,8 @@ module Api
   module V1
     # Operator CRUD for OAuth apps. An app's whole identity is its globally-unique
     # `slug`, so it is addressed by oid or slug (no namespace/foreign_id), and
-    # `PUT` upserts by slug. client_secret is write-only and is NEVER serialized
-    # back -- only a `client_secret_set` boolean is.
+    # `PUT` upserts by slug. client_secret is required and write-only: it is
+    # accepted on writes but NEVER serialized back.
     class OauthAppsController < Api::BaseController
       def index
         records, meta = paginated_apps
@@ -94,8 +94,8 @@ module Api
         app.save!
       end
 
-      # Observability only. The client_secret is deliberately never included; only
-      # whether one is set.
+      # Observability only. The client_secret is deliberately never included (it is
+      # required, so its presence is implied).
       def record_payload(app)
         {
           id: app.oid,
@@ -104,7 +104,6 @@ module Api
           labels: app.labels,
           provider: app.provider,
           client_id: app.client_id,
-          client_secret_set: app.client_secret.present?,
           allowed_scopes: app.allowed_scopes,
           credential_namespace: app.credential_namespace,
           enabled: app.enabled,
