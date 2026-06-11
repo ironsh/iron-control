@@ -10,7 +10,7 @@ module SecretKinds
   # Secret" menu). The remaining kinds are read-only until their form is built.
   SECRET_KINDS = {
     "static" => { model: StaticSecret, label: "Static", includes: :source, form: true },
-    "gcp_auth" => { model: GcpAuthSecret, label: "GCP Auth", includes: :keyfile_source, form: false },
+    "gcp_auth" => { model: GcpAuthSecret, label: "GCP Auth", includes: :keyfile_source, form: true },
     "aws_auth" => { model: AwsAuthSecret, label: "AWS Auth", includes: :sources, form: false },
     "oauth_token" => { model: OauthTokenSecret, label: "OAuth Token", includes: :sources, form: false },
     "pg_dsn" => { model: PgDsnSecret, label: "Postgres DSN", includes: :dsn_source, form: true },

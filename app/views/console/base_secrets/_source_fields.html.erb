@@ -1,12 +1,15 @@
 <%#
   Reusable secret-source fields. `source` is the existing SecretSource (or nil on
-  create); `heading` defaults to "Source". A control_plane source edits an inline
-  value; every other backend edits a single reference mapped to its primary config
-  key. The source-fields Stimulus controller reveals the right inputs per backend.
+  create); `heading` defaults to "Source". `bare` (default false) drops the
+  form-section card wrapper so the fields sit inside another section, as the
+  gcp_auth keyfile credentials do. A control_plane source edits an inline value;
+  every other backend edits a single reference mapped to its primary config key.
+  The source-fields Stimulus controller reveals the right inputs per backend.
 %>
 <%
   src = local_assigns[:source]
   heading = local_assigns.fetch(:heading, "Source")
+  bare = local_assigns.fetch(:bare, false)
   type = src&.source_type.presence || "env"
   cfg = src&.config.is_a?(Hash) ? src.config : {}
   reference = cfg[SecretKinds::SOURCE_REF_KEYS[type]]
@@ -26,8 +29,8 @@
   is_inline = type == "control_plane"
   is_aws = %w[aws_sm aws_ssm].include?(type)
 %>
-<section data-controller="source-fields" class="form-section">
-  <h2 class="form-section-heading"><%= heading %></h2>
+<%= content_tag(bare ? :div : :section, data: { controller: "source-fields" }, class: bare ? "space-y-4" : "form-section") do %>
+  <%= content_tag(bare ? :h3 : :h2, heading, class: "form-section-heading#{' mb-0' if bare}") %>
   <% source_errors = (src ? src.errors.full_messages : []) + secret.errors[:dsn_source] %>
   <% if source_errors.any? %>
     <p class="field-error mt-0 mb-3"><%= source_errors.to_sentence %></p>
@@ -63,4 +66,4 @@
       <p class="form-hint">Extract this key from the resolved value if it is JSON.</p>
     </div>
   </div>
-</section>
+<% end %>

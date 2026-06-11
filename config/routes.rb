@@ -24,6 +24,7 @@ Rails.application.routes.draw do
   namespace :console do
     resources :static_secrets, only: %i[new create edit update], path: "secrets/static"
     resources :pg_dsn_secrets, only: %i[new create edit update], path: "secrets/pg_dsn"
+    resources :gcp_auth_secrets, only: %i[new create edit update], path: "secrets/gcp_auth"
   end
   get "console/secrets/:kind/:id", to: "console#secret", as: :console_secret
   get "console/credentials", to: "console#credentials", as: :console_credentials
