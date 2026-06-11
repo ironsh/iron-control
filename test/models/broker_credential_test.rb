@@ -42,7 +42,6 @@ class BrokerCredentialTest < ActiveSupport::TestCase
 
   def build_app(**overrides)
     OauthApp.create!({
-      namespace: "default", foreign_id: "app-#{SecureRandom.hex(4)}",
       provider: "google", slug: "slug-#{SecureRandom.hex(4)}",
       client_id: "app-cid", client_secret: "app-secret",
       allowed_scopes: %w[a b],

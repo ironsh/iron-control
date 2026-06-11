@@ -15,10 +15,9 @@
     <table class="min-w-full divide-y divide-ink-600 text-sm">
       <thead class="bg-ink-800/80 text-left text-xs uppercase tracking-wider text-zinc-500">
         <tr>
-          <th class="px-5 py-3 font-medium">ID</th>
-          <th class="px-5 py-3 font-medium">Name</th>
-          <th class="px-5 py-3 font-medium">Provider</th>
           <th class="px-5 py-3 font-medium">Slug</th>
+          <th class="px-5 py-3 font-medium">Description</th>
+          <th class="px-5 py-3 font-medium">Provider</th>
           <th class="px-5 py-3 font-medium">Client ID</th>
           <th class="px-5 py-3 font-medium">Enabled</th>
           <th class="px-5 py-3 font-medium">Credentials</th>
@@ -28,25 +27,19 @@
         <% @oauth_apps.each do |a| %>
           <tr class="transition-colors hover:bg-iron-500/[0.06]">
             <td class="px-5 py-3 whitespace-nowrap">
-              <% if a.foreign_id.present? %>
-                <%= link_to truncate_middle(a.foreign_id), console_oauth_app_path(a.oid), class: "text-iron-400 hover:text-iron-300 hover:underline", title: a.foreign_id %>
-                <%= id_meta_line(a.namespace, oid: a.oid) %>
-              <% else %>
-                <%= link_to a.oid, console_oauth_app_path(a.oid), class: "text-iron-400 hover:text-iron-300 hover:underline" %>
-                <%= id_meta_line(a.namespace) %>
-              <% end %>
+              <%= link_to a.slug, console_oauth_app_path(a.oid), class: "font-mono text-iron-400 hover:text-iron-300 hover:underline" %>
+              <%= id_meta_line(a.oid) %>
             </td>
-            <td class="px-5 py-3 whitespace-nowrap text-zinc-100">
-              <% if a.name.presence %>
-                <span title="<%= a.name %>"><%= truncate_middle(a.name) %></span>
+            <td class="px-5 py-3 whitespace-nowrap text-zinc-400">
+              <% if a.description.presence %>
+                <span title="<%= a.description %>"><%= truncate_middle(a.description) %></span>
               <% else %>
-                <span class="text-zinc-600">unnamed</span>
+                <span class="text-zinc-600">—</span>
               <% end %>
             </td>
             <td class="px-5 py-3 whitespace-nowrap">
               <span class="rounded bg-ink-700 px-2 py-0.5 text-[11px] uppercase tracking-wide text-zinc-300"><%= a.provider %></span>
             </td>
-            <td class="px-5 py-3 whitespace-nowrap font-mono text-xs text-zinc-300"><%= a.slug %></td>
             <td class="px-5 py-3 whitespace-nowrap text-zinc-400"><%= truncate_middle(a.client_id) %></td>
             <td class="px-5 py-3 whitespace-nowrap">
               <% if a.enabled? %>

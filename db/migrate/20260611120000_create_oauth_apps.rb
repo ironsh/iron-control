@@ -1,21 +1,16 @@
 class CreateOauthApps < ActiveRecord::Migration[8.1]
   def change
     create_table :oauth_apps do |t|
-      # Identity (same shape as broker_credentials).
-      t.string :namespace, null: false, default: "default"
-      t.string :foreign_id
-      t.string :name
+      # Identity. The slug is the app's whole identity: a globally-unique,
+      # URL-safe name that both addresses the app in the API and names its
+      # well-known consent links (/oauth/<slug>/start and /callback). A team
+      # member recognizes it ("google"); no namespace/foreign_id/name needed.
+      t.string :slug, null: false
       t.string :description
       t.jsonb :labels, null: false, default: {}
 
       # Which provider strategy drives this app's consent flows ("google").
       t.string :provider, null: false
-
-      # Globally-unique URL name for the app's well-known consent links:
-      # /oauth/<slug>/start and /oauth/<slug>/callback. Distinct from
-      # namespace/foreign_id (which address the app in the API) so the public
-      # link is a single short token a team member can recognize ("google").
-      t.string :slug, null: false
 
       # OAuth client. client_id is not secret; client_secret is encrypted at the
       # model layer.
@@ -37,7 +32,6 @@ class CreateOauthApps < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :oauth_apps, [ :namespace, :foreign_id ], unique: true
     add_index :oauth_apps, :slug, unique: true
     add_index :oauth_apps, :labels, using: :gin
   end

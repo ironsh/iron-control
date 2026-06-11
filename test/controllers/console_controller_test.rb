@@ -108,7 +108,7 @@ class ConsoleControllerTest < ActionDispatch::IntegrationTest
     app.update!(client_secret: "shh")
     get console_oauth_app_url(app.oid)
     assert_response :ok
-    assert_select "h1", text: app.name
+    assert_select "h1", text: app.slug
     assert_select "dd", text: app.client_id
     assert_select "dd", text: "set" # client secret presence, never the value
     assert_includes response.body, "/oauth/google/callback"

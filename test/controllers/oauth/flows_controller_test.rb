@@ -125,7 +125,7 @@ module Oauth
 
       cred = BrokerCredential.find_by(oauth_app: @app, provider_subject: "google-sub-1")
       assert_equal "acme", cred.namespace
-      assert_equal "google-google-app-google-sub-1", cred.foreign_id
+      assert_equal "google-google-google-sub-1", cred.foreign_id
       assert_equal "https://oauth2.googleapis.com/token", cred.token_endpoint
       assert_equal "user@example.com", cred.provider_email
       assert cred.external_user_key.present?, "external_user_key should be auto-generated"

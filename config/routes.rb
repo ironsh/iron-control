@@ -97,10 +97,10 @@ Rails.application.routes.draw do
         collection { get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup }
       end
 
-      # Operator-managed OAuth apps (ApiKey auth). CRUD + lookup; client_secret is
-      # write-only and never serialized back.
+      # Operator-managed OAuth apps (ApiKey auth). Addressed by oid or slug; CRUD
+      # + lookup-by-slug. client_secret is write-only and never serialized back.
       resources :oauth_apps, only: %i[index show create update destroy] do
-        collection { get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup }
+        collection { get "lookup/:slug", action: :lookup, as: :lookup }
       end
 
       # Called by iron-proxy instances (proxy bearer auth, not ApiKey auth).

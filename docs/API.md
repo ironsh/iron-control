@@ -835,7 +835,7 @@ When a refresh fails unrecoverably (for example the IdP returns `invalid_grant` 
 
 ## OAuth apps
 
-An OAuth app registers an OAuth client (provider, client id, and client secret) and the scopes its [consent flow](#oauth-consent-flow) requests. Each app has a globally-unique `slug` that names its well-known consent links. A team member who knows the integration (for example `google`) opens `/oauth/<slug>/start`, consents, and each completed consent mints (or updates) a [broker credential](#broker-credentials) linked back to the app. The minted credential is refreshed by the normal broker loop and delegates its `client_id` / `client_secret` to the app.
+An OAuth app registers an OAuth client (provider, client id, and client secret) and the scopes its [consent flow](#oauth-consent-flow) requests. The app's whole identity is a globally-unique `slug`: a team member who knows the integration (for example `google`) opens `/oauth/<slug>/start`, consents, and each completed consent mints (or updates) a [broker credential](#broker-credentials) linked back to the app. The minted credential is refreshed by the normal broker loop and delegates its `client_id` / `client_secret` to the app.
 
 Only managing the app's configuration requires API key auth. The consent flow endpoints themselves are unauthenticated and live on iron-control's own domain (see [OAuth consent flow](#oauth-consent-flow)).
 
@@ -845,12 +845,10 @@ Google is the only supported provider in this release. The `provider` field is v
 
 | Field                  | In requests | Notes |
 | ---------------------- | ----------- | ----- |
-| `namespace`            | optional    | Defaults to `"default"`. Immutable. |
-| `foreign_id`           | optional    | Unique per namespace. Immutable. |
-| `name`, `description`  | optional    | |
+| `slug`                 | required    | The app's identity: globally-unique, URL-safe, and the name in the well-known consent links (`/oauth/<slug>/start`). Must not start with the opaque-id prefix. |
+| `description`          | optional    | |
 | `labels`               | optional    | |
 | `provider`             | required    | The provider strategy. Currently only `"google"`. |
-| `slug`                 | required    | Globally-unique, URL-safe name for the well-known consent links (`/oauth/<slug>/start`). |
 | `client_id`            | required    | OAuth client id. Not secret; returned in responses. |
 | `client_secret`        | required on create | OAuth client secret. Write-only and encrypted at rest; on update it is only changed when supplied. Never returned. |
 | `allowed_scopes`       | required    | Non-empty array of scope strings the start endpoint requests. A flow's optional `scopes` param must be a subset; omitting it requests all of these. |
@@ -870,11 +868,9 @@ Read-only fields:
 ```json
 {
   "data": {
-    "namespace": "default",
-    "foreign_id": "gmail-app",
-    "name": "Gmail",
-    "provider": "google",
     "slug": "google",
+    "description": "Gmail",
+    "provider": "google",
     "client_id": "1234.apps.googleusercontent.com",
     "client_secret": "GOCSPX-...",
     "allowed_scopes": ["https://www.googleapis.com/auth/gmail.readonly"],
@@ -889,13 +885,10 @@ Returns `201`. The `client_secret` is never echoed back:
 {
   "data": {
     "id": "oap_...",
-    "namespace": "default",
-    "foreign_id": "gmail-app",
-    "name": "Gmail",
-    "description": null,
+    "slug": "google",
+    "description": "Gmail",
     "labels": {},
     "provider": "google",
-    "slug": "google",
     "client_id": "1234.apps.googleusercontent.com",
     "client_secret_set": true,
     "allowed_scopes": ["https://www.googleapis.com/auth/gmail.readonly"],
@@ -911,10 +904,10 @@ Returns `201`. The `client_secret` is never echoed back:
 
 | Method | Path | Notes |
 | ------ | ---- | ----- |
-| `GET`  | `/api/v1/oauth_apps?namespace=default` | List. `namespace` required; `labels[k]=v` and pagination optional. |
-| `GET`  | `/api/v1/oauth_apps/:id` | Fetch one. `404` if missing. |
-| `GET`  | `/api/v1/oauth_apps/lookup/:namespace/:foreign_id` | Fetch by namespace + foreign id. `404` if missing. |
-| `PUT`/`PATCH` | `/api/v1/oauth_apps/:id` | [Upsert](#upsert-put--patch) by OID or `foreign_id`. Omitted fields are preserved; `client_secret` is only changed when supplied. |
+| `GET`  | `/api/v1/oauth_apps` | List all apps. `labels[k]=v` and pagination optional. |
+| `GET`  | `/api/v1/oauth_apps/:id` | Fetch one by OID. `404` if missing. |
+| `GET`  | `/api/v1/oauth_apps/lookup/:slug` | Fetch by slug. `404` if missing. |
+| `PUT`/`PATCH` | `/api/v1/oauth_apps/:id` | [Upsert](#upsert-put--patch) by OID or slug. Omitted fields are preserved; `client_secret` is only changed when supplied. |
 | `DELETE` | `/api/v1/oauth_apps/:id` | Delete. Returns `204`; `404` if missing. Returns `409` while the app still has minted credentials (delete or unlink them first). |
 
 ## OAuth consent flow

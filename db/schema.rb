@@ -163,16 +163,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_11_120100) do
     t.string "credential_namespace", default: "default", null: false
     t.string "description"
     t.boolean "enabled", default: true, null: false
-    t.string "foreign_id"
     t.jsonb "labels", default: {}, null: false
-    t.string "name"
-    t.string "namespace", default: "default", null: false
     t.string "provider", null: false
     t.string "slug", null: false
     t.datetime "updated_at", null: false
     t.index ["created_by_id"], name: "index_oauth_apps_on_created_by_id"
     t.index ["labels"], name: "index_oauth_apps_on_labels", using: :gin
-    t.index ["namespace", "foreign_id"], name: "index_oauth_apps_on_namespace_and_foreign_id", unique: true
     t.index ["slug"], name: "index_oauth_apps_on_slug", unique: true
   end
 

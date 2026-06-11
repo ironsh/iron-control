@@ -13,7 +13,6 @@ module Api
 
       def valid_body(**overrides)
         { data: {
-          namespace: "acme", foreign_id: "api-google",
           provider: "google", slug: "api-google", client_id: "the-client-id", client_secret: "the-secret",
           allowed_scopes: [ "https://www.googleapis.com/auth/gmail.readonly" ],
           credential_namespace: "acme"
@@ -21,17 +20,19 @@ module Api
       end
 
       test "rejects requests without an API key" do
-        get api_v1_oauth_apps_url(namespace: "acme")
+        get api_v1_oauth_apps_url
         assert_response :unauthorized
       end
 
-      test "index lists apps in a namespace without the client_secret" do
-        get api_v1_oauth_apps_url(namespace: "acme"), headers: auth_headers
+      test "index lists apps without the client_secret" do
+        get api_v1_oauth_apps_url, headers: auth_headers
         assert_response :ok
         row = json_body.fetch("data").first
         assert_equal "google", row["provider"]
         refute row.key?("client_secret")
         assert row.key?("client_secret_set")
+        refute row.key?("namespace")
+        refute row.key?("foreign_id")
       end
 
       test "show returns config but never the client_secret" do
@@ -40,13 +41,14 @@ module Api
         get api_v1_oauth_app_url(id: app.oid), headers: auth_headers
         assert_response :ok
         data = json_body.fetch("data")
+        assert_equal "google", data["slug"]
         assert_equal "acme-google-client-id", data["client_id"]
         assert_equal true, data["client_secret_set"]
         refute data.key?("client_secret")
       end
 
-      test "lookup resolves by namespace and foreign_id" do
-        get lookup_api_v1_oauth_apps_url(namespace: "acme", foreign_id: "google-app"), headers: auth_headers
+      test "lookup resolves by slug" do
+        get lookup_api_v1_oauth_apps_url(slug: "google"), headers: auth_headers
         assert_response :ok
         assert_equal oauth_apps(:acme_google).oid, json_body.dig("data", "id")
       end
@@ -58,6 +60,7 @@ module Api
         assert_response :created
         data = json_body.fetch("data")
         assert_equal "google", data["provider"]
+        assert_equal "api-google", data["slug"]
         assert_equal true, data["client_secret_set"]
         refute data.key?("client_secret")
 
@@ -73,19 +76,19 @@ module Api
         assert_response :unprocessable_entity
       end
 
-      test "PUT upsert creates by foreign_id then updates leaving a blank secret in place" do
+      test "PUT upsert creates by slug then updates leaving a blank secret in place" do
         put api_v1_oauth_app_url(id: "put-google"),
-            params: valid_body(foreign_id: nil).to_json, headers: auth_headers
+            params: valid_body(slug: nil).to_json, headers: auth_headers
         assert_response :created
-        app = OauthApp.find_by!(namespace: "acme", foreign_id: "put-google")
+        app = OauthApp.find_by!(slug: "put-google")
         assert_equal "the-secret", app.client_secret
 
         # A second PUT without a client_secret keeps the stored value.
         put api_v1_oauth_app_url(id: "put-google"),
-            params: { data: { namespace: "acme", name: "Renamed", client_secret: "" } }.to_json, headers: auth_headers
+            params: { data: { description: "Renamed", client_secret: "" } }.to_json, headers: auth_headers
         assert_response :ok
         app.reload
-        assert_equal "Renamed", app.name
+        assert_equal "Renamed", app.description
         assert_equal "the-secret", app.client_secret
       end
 

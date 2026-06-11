@@ -3,7 +3,6 @@ require "test_helper"
 class OauthAppTest < ActiveSupport::TestCase
   def build_app(**overrides)
     OauthApp.new({
-      namespace: "default", foreign_id: "app-#{SecureRandom.hex(4)}",
       provider: "google", slug: "slug-#{SecureRandom.hex(4)}",
       client_id: "cid", client_secret: "sec",
       allowed_scopes: %w[scope.a scope.b],
@@ -27,8 +26,7 @@ class OauthAppTest < ActiveSupport::TestCase
     refute build_app(client_secret: nil).valid?
   end
 
-  test "namespace and credential_namespace must be url-safe" do
-    refute build_app(namespace: "not safe").valid?
+  test "credential_namespace must be url-safe" do
     refute build_app(credential_namespace: "not/safe").valid?
   end
 
@@ -41,6 +39,10 @@ class OauthAppTest < ActiveSupport::TestCase
     dup = build_app(slug: "taken-slug")
     refute dup.valid?
     assert dup.errors[:slug].any?
+  end
+
+  test "slug must not shadow the opaque-id prefix" do
+    refute build_app(slug: "oap_abc").valid?
   end
 
   test "allowed_scopes must be a non-empty array of non-blank strings" do

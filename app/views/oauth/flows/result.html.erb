@@ -5,7 +5,7 @@
     when :denied  then [ "Not connected", "text-amber-300" ]
     else               [ "Something went wrong", "text-red-300" ]
     end
-  app_name = @app&.name.presence || @app&.slug
+  app_name = @app&.slug
 %>
 <% content_for :title, "#{heading} · Iron Control" %>
 

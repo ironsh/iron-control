@@ -28,8 +28,8 @@ module Console
       assert_difference -> { OauthApp.count } => 1 do
         post console_oauth_app_forms_url, params: {
           oauth_app: {
-            namespace: "acme", foreign_id: "new-google", name: "New Google",
-            provider: "google", slug: "new-google", client_id: "cid", client_secret: "shh",
+            slug: "new-google", description: "New Google integration",
+            provider: "google", client_id: "cid", client_secret: "shh",
             credential_namespace: "acme", enabled: "1",
             allowed_scopes: "https://www.googleapis.com/auth/gmail.readonly\nhttps://www.googleapis.com/auth/calendar.readonly\n"
           },
@@ -37,12 +37,12 @@ module Console
         }
       end
 
-      app = OauthApp.find_by!(namespace: "acme", foreign_id: "new-google")
+      app = OauthApp.find_by!(slug: "new-google")
       assert_redirected_to console_oauth_app_path(app.oid)
       assert_equal "google", app.provider
       assert_equal "cid", app.client_id
       assert_equal "shh", app.client_secret
-      assert_equal "new-google", app.slug
+      assert_equal "New Google integration", app.description
       assert_equal %w[https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly], app.allowed_scopes
       assert_equal({ "team" => "comms" }, app.labels)
       assert app.enabled?
@@ -53,7 +53,7 @@ module Console
       assert_no_difference -> { OauthApp.count } do
         post console_oauth_app_forms_url, params: {
           oauth_app: {
-            namespace: "acme", provider: "github", slug: "gh", client_id: "cid", client_secret: "shh",
+            provider: "github", slug: "gh", client_id: "cid", client_secret: "shh",
             allowed_scopes: "a"
           }
         }
@@ -65,7 +65,7 @@ module Console
       assert_no_difference -> { OauthApp.count } do
         post console_oauth_app_forms_url, params: {
           oauth_app: {
-            namespace: "acme", provider: "google", slug: "no-scopes", client_id: "cid", client_secret: "shh",
+            provider: "google", slug: "no-scopes", client_id: "cid", client_secret: "shh",
             allowed_scopes: ""
           }
         }
@@ -78,7 +78,7 @@ module Console
       app.update!(client_secret: "original")
       patch console_oauth_app_form_url(app.oid), params: {
         oauth_app: {
-          namespace: app.namespace, foreign_id: app.foreign_id, name: "Renamed",
+          slug: app.slug, description: "Renamed",
           provider: "google", client_id: "new-cid", credential_namespace: app.credential_namespace,
           enabled: "0",
           allowed_scopes: "https://www.googleapis.com/auth/gmail.readonly"
@@ -86,7 +86,7 @@ module Console
       }
       assert_redirected_to console_oauth_app_path(app.oid)
       app.reload
-      assert_equal "Renamed", app.name
+      assert_equal "Renamed", app.description
       assert_equal "new-cid", app.client_id
       refute app.enabled?
       assert_equal %w[https://www.googleapis.com/auth/gmail.readonly], app.allowed_scopes
@@ -97,7 +97,7 @@ module Console
       app.update!(client_secret: "original-secret")
       patch console_oauth_app_form_url(app.oid), params: {
         oauth_app: {
-          namespace: app.namespace, foreign_id: app.foreign_id,
+          slug: app.slug,
           provider: "google", client_id: app.client_id, client_secret: "",
           credential_namespace: app.credential_namespace, enabled: "1",
           allowed_scopes: Array(app.allowed_scopes).join("\n")

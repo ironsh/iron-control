@@ -10,7 +10,7 @@ module Console
     before_action :set_app, only: %i[edit update]
 
     def new
-      @app = OauthApp.new(namespace: "default", provider: Oauth::Providers.keys.first, enabled: true)
+      @app = OauthApp.new(provider: Oauth::Providers.keys.first, enabled: true)
     end
 
     def create
@@ -40,10 +40,7 @@ module Console
     # assigned when non-blank, so editing without re-entering it leaves the stored
     # value in place (same pattern as BrokerCredentialsController).
     def assign_form(app)
-      fields = app_params.permit(:namespace, :foreign_id, :name, :description,
-                                 :provider, :slug, :client_id, :credential_namespace)
-      fields[:namespace] = fields[:namespace].presence || "default"
-      fields[:foreign_id] = fields[:foreign_id].presence
+      fields = app_params.permit(:slug, :description, :provider, :client_id, :credential_namespace)
       fields[:credential_namespace] = fields[:credential_namespace].presence || "default"
       app.assign_attributes(fields)
       app.enabled = app_params[:enabled] == "1"

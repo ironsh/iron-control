@@ -2,13 +2,11 @@
 # encrypt_fixtures is off (same as broker_credentials.yml). client_id is not
 # encrypted, so it lives here.
 acme_google:
-  namespace: acme
-  foreign_id: google-app
-  name: Acme Google
+  slug: google
+  description: Acme Google integration
   labels:
     team: comms
   provider: google
-  slug: google
   client_id: acme-google-client-id
   allowed_scopes:
     - https://www.googleapis.com/auth/gmail.readonly
@@ -18,11 +16,9 @@ acme_google:
   created_by: acme_admin
 
 acme_google_disabled:
-  namespace: acme
-  foreign_id: google-app-disabled
-  name: Acme Google (disabled)
-  provider: google
   slug: google-disabled
+  description: Acme Google integration (disabled)
+  provider: google
   client_id: acme-google-disabled-client-id
   allowed_scopes:
     - https://www.googleapis.com/auth/gmail.readonly

@@ -18,8 +18,6 @@
 class OauthApp < ApplicationRecord
   oid_prefix "oap"
 
-  include ForeignIdCollisionGuard
-
   URL_SAFE_FORMAT = /\A[A-Za-z0-9\-._~]+\z/
   URL_SAFE_MESSAGE = "must contain only URL-safe characters (A-Z, a-z, 0-9, -, ., _, ~)"
 
@@ -33,12 +31,13 @@ class OauthApp < ApplicationRecord
 
   encrypts :client_secret
 
-  validates :namespace, presence: true, format: { with: URL_SAFE_FORMAT, message: URL_SAFE_MESSAGE }
-  validates :foreign_id, uniqueness: { scope: :namespace, allow_nil: true },
-            format: { with: URL_SAFE_FORMAT, message: URL_SAFE_MESSAGE }, allow_nil: true
-  validates :provider, inclusion: { in: ->(_) { Oauth::Providers.keys }, message: "is not a supported provider" }
+  # The slug is the app's whole identity: globally unique and URL-safe. It both
+  # addresses the app in the API (oid or slug) and names the consent links, so it
+  # must not start with the opaque-id prefix or the two forms would collide.
   validates :slug, presence: true, uniqueness: true,
             format: { with: URL_SAFE_FORMAT, message: URL_SAFE_MESSAGE }
+  validate :slug_does_not_shadow_oid
+  validates :provider, inclusion: { in: ->(_) { Oauth::Providers.keys }, message: "is not a supported provider" }
   validates :client_id, presence: true
   validates :client_secret, presence: true
   validates :credential_namespace, presence: true, format: { with: URL_SAFE_FORMAT, message: URL_SAFE_MESSAGE }
@@ -53,6 +52,13 @@ class OauthApp < ApplicationRecord
   def scopes_allowed?(requested) = (Array(requested) - Array(allowed_scopes)).empty?
 
   private
+
+  def slug_does_not_shadow_oid
+    return if slug.blank?
+    reserved = "#{self.class.oid_prefix}_"
+    return unless slug.start_with?(reserved)
+    errors.add(:slug, "must not start with #{reserved.inspect}, which is reserved for opaque ids")
+  end
 
   def labels_is_a_hash
     errors.add(:labels, "must be a hash") unless labels.is_a?(Hash)

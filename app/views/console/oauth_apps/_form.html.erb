@@ -7,20 +7,10 @@
       <h2 class="form-section-heading">Identity</h2>
       <div class="grid gap-5 sm:grid-cols-2">
         <div>
-          <label class="form-label" for="oauth_app_namespace">Namespace</label>
-          <%= text_field_tag "oauth_app[namespace]", app.namespace.presence || "default", id: "oauth_app_namespace", class: "form-input #{field_error_class(app, :namespace)}" %>
-          <%= field_error(app, :namespace) %>
-        </div>
-        <div>
-          <label class="form-label" for="oauth_app_foreign_id">Foreign ID</label>
-          <%= text_field_tag "oauth_app[foreign_id]", app.foreign_id, id: "oauth_app_foreign_id", class: "form-input #{field_error_class(app, :foreign_id)}", placeholder: "stable-handle" %>
-          <%= field_error(app, :foreign_id) %>
-          <p class="form-hint">Optional. A stable, URL-safe handle the start URL can reference.</p>
-        </div>
-        <div>
-          <label class="form-label" for="oauth_app_name">Name</label>
-          <%= text_field_tag "oauth_app[name]", app.name, id: "oauth_app_name", class: "form-input #{field_error_class(app, :name)}" %>
-          <%= field_error(app, :name) %>
+          <label class="form-label" for="oauth_app_slug">Slug *</label>
+          <%= text_field_tag "oauth_app[slug]", app.slug, id: "oauth_app_slug", class: "form-input #{field_error_class(app, :slug)}", placeholder: "google" %>
+          <%= field_error(app, :slug) %>
+          <p class="form-hint">Globally unique. The app's whole identity, and the name in the well-known link: <code>/oauth/&lt;slug&gt;/start</code>.</p>
         </div>
         <div>
           <label class="form-label" for="oauth_app_description">Description</label>
@@ -39,12 +29,6 @@
                 options_for_select(Oauth::Providers.keys.map { |k| [ k.capitalize, k ] }, app.provider),
                 id: "oauth_app_provider", class: "form-input #{field_error_class(app, :provider)}" %>
           <%= field_error(app, :provider) %>
-        </div>
-        <div>
-          <label class="form-label" for="oauth_app_slug">Slug *</label>
-          <%= text_field_tag "oauth_app[slug]", app.slug, id: "oauth_app_slug", class: "form-input #{field_error_class(app, :slug)}", placeholder: "google" %>
-          <%= field_error(app, :slug) %>
-          <p class="form-hint">Globally unique. Names the well-known link: <code>/oauth/&lt;slug&gt;/start</code>.</p>
         </div>
         <div>
           <label class="form-label" for="oauth_app_client_id">Client ID *</label>
