@@ -93,6 +93,11 @@ Rails.application.routes.draw do
     end
   end
 
+  # Public OAuth consent flow. Deliberately unauthenticated: end users of
+  # customer apps hit these, not console operators.
+  get "oauth/:provider/start", to: "oauth/flows#start", as: :oauth_start
+  get "oauth/:provider/callback", to: "oauth/flows#callback", as: :oauth_callback
+
   # Render a JSON 404 for any unmatched route instead of the static error page.
   match "*path", to: "errors#not_found", via: :all
 end

@@ -6,6 +6,22 @@ class ApplicationController < ActionController::Base
   stale_when_importmap_changes
 
   helper_method :current_user
+  helper_method :public_base_url, :oauth_callback_redirect_uri
+
+  # The public origin iron-control is reached at. Derived from the request by
+  # default; IRON_CONTROL_PUBLIC_URL overrides it for deployments behind proxies
+  # whose Host header doesn't match the public origin. Shared by the OAuth flow
+  # controller (the redirect URI it sends the IdP) and the console (the redirect
+  # URI / start-URL template it shows operators), so the two never drift.
+  def public_base_url
+    ENV["IRON_CONTROL_PUBLIC_URL"].presence || request.base_url
+  end
+
+  # The single OAuth callback redirect URI registered with the IdP for
+  # +provider_key+: "<public base>/oauth/<provider>/callback".
+  def oauth_callback_redirect_uri(provider_key)
+    URI.join(public_base_url, "/oauth/#{provider_key}/callback").to_s
+  end
 
   # Gate every UI route behind a console session by default. Controllers that
   # must stay reachable while signed out (e.g. the login form) skip this. API
