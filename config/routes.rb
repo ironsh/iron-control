@@ -31,7 +31,7 @@ Rails.application.routes.draw do
   # Create/edit form for broker credentials. Declared before the show route so
   # /console/credentials/new wins over the generic `:id` match.
   namespace :console do
-    resources :broker_credentials, only: %i[new create edit update], path: "credentials"
+    resources :broker_credentials, only: %i[new create edit update destroy], path: "credentials"
   end
   get "console/credentials/:id", to: "console#credential", as: :console_credential
   get "console/oauth_apps", to: "console#oauth_apps", as: :console_oauth_apps

@@ -133,5 +133,27 @@ module Console
       assert_nil cred.dead_reason
       assert_equal 0, cred.failure_count
     end
+
+    # --- destroy ----------------------------------------------------------
+
+    test "DELETE destroy removes an unreferenced credential" do
+      cred = broker_credentials(:globex_managed_api)
+      assert_difference -> { BrokerCredential.count } => -1 do
+        delete console_broker_credential_url(cred.oid)
+      end
+      assert_redirected_to console_credentials_path
+      assert_equal "Credential deleted.", flash[:notice]
+    end
+
+    test "DELETE destroy is blocked while a token_broker source references it" do
+      cred = broker_credentials(:globex_managed_api)
+      SecretSource.create!(source_type: "token_broker",
+                           config: { "credential_id" => cred.foreign_id, "credential_namespace" => cred.namespace })
+      assert_no_difference -> { BrokerCredential.count } do
+        delete console_broker_credential_url(cred.oid)
+      end
+      assert_redirected_to console_credential_path(cred.oid)
+      assert_match "referenced by", flash[:alert]
+    end
   end
 end
