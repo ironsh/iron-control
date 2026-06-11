@@ -26,6 +26,12 @@ class PgDsnSecret < ApplicationRecord
   # blocked by the proxy's role policy; they may not appear as pinned settings.
   RESERVED_SETTING_NAMES = %w[role session_authorization].freeze
 
+  # A setting's `value_from` reference takes exactly one of these keys.
+  VALUE_FROM_KEYS = %w[principal_label principal_field].freeze
+  # Principal attributes a `principal_field` reference may name, matching how
+  # the API serializes principals (`id` is the opaque oid).
+  PRINCIPAL_FIELDS = %w[id namespace foreign_id name].freeze
+
   has_one :dsn_source, class_name: "SecretSource", dependent: :destroy
   has_many :grants, dependent: :destroy
   belongs_to :created_by, class_name: "User"
@@ -50,14 +56,13 @@ class PgDsnSecret < ApplicationRecord
   # The pinned session settings as the proxy expects them: an ordered array of
   # { "name", "value" } objects. Normalizes whatever shape was stored (string
   # keys, blank rows) into the canonical form, dropping entries without a name,
-  # and renders principal-scoped placeholders when a principal is provided.
+  # and resolves `value_from` references against the given principal.
   def proxy_settings(principal: nil)
     Array(settings).filter_map do |s|
       next unless s.is_a?(Hash)
       name = s["name"].presence || s[:name].presence
       next if name.blank?
-      value = render_setting_value((s["value"] || s[:value]).to_s, principal)
-      { "name" => name, "value" => value }
+      { "name" => name, "value" => setting_value(s, principal) }
     end
   end
 
@@ -76,34 +81,31 @@ class PgDsnSecret < ApplicationRecord
     errors.add(:labels, "must be a hash") unless labels.is_a?(Hash)
   end
 
-  def render_setting_value(value, principal)
-    return value unless principal
+  # The concrete value the proxy should pin: the stored literal, or the
+  # principal attribute/label a `value_from` reference names. References
+  # resolve to "" when no principal is given or the label is absent, so
+  # RLS-style policies fail closed rather than seeing a literal placeholder.
+  def setting_value(setting, principal)
+    ref = setting["value_from"] || setting[:value_from]
+    return (setting["value"] || setting[:value]).to_s unless ref.is_a?(Hash)
+    return "" unless principal
 
-    value.gsub(/\{\{\s*([^{}]+?)\s*\}\}/) do
-      render_setting_expression(Regexp.last_match(1).strip, principal)
+    label = ref["principal_label"] || ref[:principal_label]
+    return principal.labels.fetch(label.to_s, "").to_s if label.present?
+
+    case (ref["principal_field"] || ref[:principal_field]).to_s
+    when "id" then principal.oid
+    when "namespace" then principal.namespace.to_s
+    when "foreign_id" then principal.foreign_id.to_s
+    when "name" then principal.name.to_s
+    else "" # unreachable for saved records; settings_are_valid rejects others
     end
   end
 
-  def render_setting_expression(expression, principal)
-    case expression
-    when ".Principal.Id", ".Principal.ID", ".Principal.Oid", ".Principal.OID"
-      principal.oid
-    when ".Principal.Namespace"
-      principal.namespace.to_s
-    when ".Principal.ForeignId", ".Principal.ForeignID"
-      principal.foreign_id.to_s
-    when ".Principal.Name"
-      principal.name.to_s
-    when /\A\.Principal\.Labels\.([A-Za-z0-9_.-]+)\z/
-      principal.labels.fetch(Regexp.last_match(1), "").to_s
-    else
-      ""
-    end
-  end
-
-  # Settings must be an array of { name, value } objects with valid, unique GUC
-  # names, mirroring the proxy's compileSettings so an upstream the proxy would
-  # reject can't be saved here. Empty is fine (the default).
+  # Settings must be an array of { name, value } or { name, value_from }
+  # objects with valid, unique GUC names, mirroring the proxy's compileSettings
+  # so an upstream the proxy would reject can't be saved here. Empty is fine
+  # (the default).
   def settings_are_valid
     return errors.add(:settings, "must be an array") unless settings.is_a?(Array)
 
@@ -126,6 +128,31 @@ class PgDsnSecret < ApplicationRecord
     lower = name.downcase
     return "#{name.inspect} is managed by the proxy; use the role field" if RESERVED_SETTING_NAMES.include?(lower)
     return "duplicate setting #{name.inspect}" unless seen.add?(lower)
+
+    value_from_error(setting)
+  end
+
+  # Why setting's `value_from` reference is invalid, or nil when it's absent or
+  # well-formed. Rejecting bad references at save time is the point of the
+  # structured shape: a typo'd field is an error here, not an empty string the
+  # proxy quietly pins at sync time.
+  def value_from_error(setting)
+    ref = setting["value_from"] || setting[:value_from]
+    return nil if ref.nil?
+    return "value and value_from are mutually exclusive" unless (setting["value"] || setting[:value]).nil?
+    return "value_from must be an object" unless ref.is_a?(Hash)
+
+    keys = ref.keys.map(&:to_s)
+    unless keys.length == 1 && VALUE_FROM_KEYS.include?(keys.first)
+      return "value_from must have exactly one of #{VALUE_FROM_KEYS.join(" or ")}"
+    end
+
+    label = ref["principal_label"] || ref[:principal_label]
+    field = ref["principal_field"] || ref[:principal_field]
+    return "principal_label can't be blank" if keys.first == "principal_label" && label.to_s.blank?
+    if keys.first == "principal_field" && !PRINCIPAL_FIELDS.include?(field.to_s)
+      return "unknown principal_field #{field.to_s.inspect} (one of: #{PRINCIPAL_FIELDS.join(", ")})"
+    end
 
     nil
   end

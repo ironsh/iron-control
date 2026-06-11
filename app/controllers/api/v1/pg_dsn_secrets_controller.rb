@@ -49,12 +49,13 @@ module Api
       def assign_and_save!(ref, attrs)
         base = attrs.permit(
           :namespace, :foreign_id, :name, :description, :database, :role,
-          labels: {}, settings: [ :name, :value ]
+          labels: {}, settings: [ :name, :value, { value_from: {} } ]
         )
         # settings is a full replace when the key is present; a normalized array
-        # of { "name", "value" } hashes is what the model stores and serializes.
+        # of { "name", "value" } or { "name", "value_from" } hashes is what the
+        # model stores and serializes.
         if attrs.key?(:settings)
-          base[:settings] = Array(base[:settings]).map { |s| s.to_h.slice("name", "value") }
+          base[:settings] = Array(base[:settings]).map { |s| s.to_h.slice("name", "value", "value_from") }
         end
         # A PUT upsert by foreign_id sets identity on the record before
         # assignment; a blank body value must not wipe it.

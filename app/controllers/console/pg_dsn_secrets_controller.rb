@@ -22,14 +22,21 @@ module Console
       secret.dsn_source = build_source
     end
 
-    # The pinned session settings as an ordered array of { "name", "value" }
-    # hashes (order matters: the proxy applies them in sequence). Rows with a
-    # blank name are dropped; the model validates names and uniqueness.
+    # The pinned session settings as an ordered array of { "name", "value" } or
+    # { "name", "value_from" } hashes (order matters: the proxy applies them in
+    # sequence). Each row's kind select picks a literal value or a principal
+    # reference. Rows with a blank name are dropped; the model validates names,
+    # uniqueness, and references.
     def setting_rows(raw)
       (raw&.to_unsafe_h || {}).values.filter_map do |row|
         name = row["name"].to_s.strip
         next if name.blank?
-        { "name" => name, "value" => row["value"].to_s }
+        kind = row["kind"].to_s
+        if PgDsnSecret::VALUE_FROM_KEYS.include?(kind)
+          { "name" => name, "value_from" => { kind => row["value"].to_s.strip } }
+        else
+          { "name" => name, "value" => row["value"].to_s }
+        end
       end
     end
   end

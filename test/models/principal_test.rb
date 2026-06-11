@@ -183,19 +183,16 @@ class PrincipalTest < ActiveSupport::TestCase
     assert_equal({ "type" => "env", "var" => "PG_ANALYTICS_DSN" }, entries.first["dsn"])
   end
 
-  test "sync_postgres renders settings against the principal" do
+  test "sync_postgres resolves value_from settings against the principal" do
     principal = principals(:globex_user)
-    principal.update!(labels: { "slack_channel_id" => "C999", "centaur_slack_admin" => "true" })
+    principal.update!(labels: { "slack_channel_id" => "C999" })
     pg = pg_dsn_secrets(:acme_analytics_pg)
     pg.update!(settings: [
       {
         "name" => "centaur.slack_channel_id",
-        "value" => "{{ .Principal.Labels.slack_channel_id }}"
+        "value_from" => { "principal_label" => "slack_channel_id" }
       },
-      {
-        "name" => "centaur.slack_admin",
-        "value" => "{{ .Principal.Labels.centaur_slack_admin }}"
-      }
+      { "name" => "centaur.principal", "value_from" => { "principal_field" => "foreign_id" } }
     ])
     Grant.create!(principal: principal, pg_dsn_secret: pg, created_by: users(:globex_admin))
 
@@ -203,7 +200,7 @@ class PrincipalTest < ActiveSupport::TestCase
     assert_equal(
       [
         { "name" => "centaur.slack_channel_id", "value" => "C999" },
-        { "name" => "centaur.slack_admin", "value" => "true" }
+        { "name" => "centaur.principal", "value" => principal.foreign_id }
       ],
       entry["settings"]
     )

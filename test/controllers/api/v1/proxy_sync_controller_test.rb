@@ -180,13 +180,13 @@ class ProxySyncControllerTest < ActionDispatch::IntegrationTest
     assert_equal [ { "name" => "app.tenant", "value" => "centaur" } ], entry["settings"]
   end
 
-  test "postgres entries render pinned session settings from the proxy principal" do
+  test "postgres entries resolve value_from settings against the proxy principal" do
     @proxy.principal.update!(labels: { "slack_channel_id" => "C0123456789" })
     pg = pg_dsn_secrets(:acme_analytics_pg)
     pg.update!(settings: [
       {
         "name" => "centaur.slack_channel_id",
-        "value" => "{{ .Principal.Labels.slack_channel_id }}"
+        "value_from" => { "principal_label" => "slack_channel_id" }
       }
     ])
 

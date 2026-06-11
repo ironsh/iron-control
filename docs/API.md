@@ -558,7 +558,7 @@ Listener and client knobs (bind address, client auth) are deliberately not model
 | `labels`      | optional    | Object; defaults to `{}`. |
 | `database`    | optional    | Upstream database name to connect to, overriding the one in the DSN. |
 | `role`        | optional    | Upstream `SET ROLE` applied to the session. |
-| `settings`    | optional    | Ordered array of `{ "name", "value" }` session variables (GUCs) the proxy SETs at session start, before the `SET ROLE`, and pins so clients cannot override them. Names must be a bare or dotted identifier; `role` and `session_authorization` are reserved. Values may include principal templates such as `{{ .Principal.Labels.team }}`; the stored value is rendered for the assigned proxy principal during sync. Replaced wholesale on update. |
+| `settings`    | optional    | Ordered array of session variables (GUCs) the proxy SETs at session start, before the `SET ROLE`, and pins so clients cannot override them. Each entry is `{ "name", "value" }` for a literal value, or `{ "name", "value_from" }` to resolve the value from the assigned proxy principal at sync time (see [principal-derived values](#principal-derived-setting-values)). Names must be a bare or dotted identifier; `role` and `session_authorization` are reserved. Replaced wholesale on update. |
 | `dsn`         | required    | A [secret source](#secret-sources) resolving to the connection string. Replaced wholesale on update. |
 
 ### Create
@@ -604,12 +604,27 @@ Returns `201` with the created resource. Response shape:
 
 The `dsn` in responses never includes a `control_plane` `secret` value.
 
-Setting value templates are rendered only in the proxy sync/effective-config
-payload. Create, update, show, and list responses echo the stored template
-string. Supported expressions are `.Principal.Id`/`.Principal.Oid`,
-`.Principal.Namespace`, `.Principal.ForeignId`, `.Principal.Name`, and
-`.Principal.Labels.<key>`. Missing labels and unsupported expressions render as
-empty strings.
+### Principal-derived setting values
+
+A setting may take its value from the proxy's assigned principal instead of
+storing a literal, by replacing `value` with `value_from`:
+
+```json
+{ "name": "centaur.slack_channel_id", "value_from": { "principal_label": "slack_channel_id" } }
+```
+
+`value_from` contains exactly one of:
+
+| Key               | Resolves to |
+| ----------------- | ----------- |
+| `principal_label` | The named label on the assigned principal. A label the principal does not carry resolves to an empty string, so RLS-style policies fail closed. |
+| `principal_field` | One of the principal's identity fields: `id` (the opaque `prn_...` id), `namespace`, `foreign_id`, or `name`. |
+
+A setting has either `value` or `value_from`, never both; unknown
+`principal_field` names and blank `principal_label` keys are rejected at create
+and update time. References are resolved only in the proxy sync and
+effective-config payloads; create, update, show, and list responses echo the
+stored reference.
 
 ### Other operations
 
