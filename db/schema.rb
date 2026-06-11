@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_11_044016) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_11_120100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -47,13 +47,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_11_044016) do
     t.string "client_id"
     t.text "client_secret"
     t.datetime "created_at", null: false
-    t.bigint "created_by_id", null: false
+    t.bigint "created_by_id"
     t.boolean "dead", default: false, null: false
     t.string "dead_reason"
     t.string "description"
     t.float "early_refresh_fraction", default: 0.2, null: false
     t.integer "early_refresh_slack_seconds", default: 300, null: false
     t.datetime "expires_at"
+    t.string "external_user_key"
     t.integer "failure_count", default: 0, null: false
     t.string "foreign_id"
     t.jsonb "labels", default: {}, null: false
@@ -62,6 +63,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_11_044016) do
     t.string "name"
     t.string "namespace", default: "default", null: false
     t.datetime "next_attempt_at"
+    t.bigint "oauth_app_id"
+    t.string "provider_email"
+    t.string "provider_subject"
     t.integer "refresh_timeout_seconds", default: 30, null: false
     t.text "refresh_token"
     t.jsonb "scopes", default: [], null: false
@@ -72,6 +76,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_11_044016) do
     t.index ["labels"], name: "index_broker_credentials_on_labels", using: :gin
     t.index ["namespace", "foreign_id"], name: "index_broker_credentials_on_namespace_and_foreign_id", unique: true
     t.index ["next_attempt_at"], name: "index_broker_credentials_on_next_attempt_at"
+    t.index ["oauth_app_id", "provider_subject"], name: "index_broker_credentials_on_oauth_app_id_and_provider_subject", unique: true, where: "(provider_subject IS NOT NULL)"
+    t.index ["oauth_app_id"], name: "index_broker_credentials_on_oauth_app_id"
   end
 
   create_table "gcp_auth_secrets", force: :cascade do |t|
@@ -146,6 +152,27 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_11_044016) do
     t.index ["created_by_id"], name: "index_hmac_secrets_on_created_by_id"
     t.index ["labels"], name: "index_hmac_secrets_on_labels", using: :gin
     t.index ["namespace", "foreign_id"], name: "index_hmac_secrets_on_namespace_and_foreign_id", unique: true
+  end
+
+  create_table "oauth_apps", force: :cascade do |t|
+    t.jsonb "allowed_return_urls", default: [], null: false
+    t.jsonb "allowed_scopes", default: [], null: false
+    t.string "client_id", null: false
+    t.text "client_secret"
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id", null: false
+    t.string "credential_namespace", default: "default", null: false
+    t.string "description"
+    t.boolean "enabled", default: true, null: false
+    t.string "foreign_id"
+    t.jsonb "labels", default: {}, null: false
+    t.string "name"
+    t.string "namespace", default: "default", null: false
+    t.string "provider", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_oauth_apps_on_created_by_id"
+    t.index ["labels"], name: "index_oauth_apps_on_labels", using: :gin
+    t.index ["namespace", "foreign_id"], name: "index_oauth_apps_on_namespace_and_foreign_id", unique: true
   end
 
   create_table "oauth_token_secrets", force: :cascade do |t|
@@ -304,6 +331,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_11_044016) do
 
   add_foreign_key "api_keys", "users"
   add_foreign_key "aws_auth_secrets", "users", column: "created_by_id"
+  add_foreign_key "broker_credentials", "oauth_apps"
   add_foreign_key "broker_credentials", "users", column: "created_by_id"
   add_foreign_key "gcp_auth_secrets", "users", column: "created_by_id"
   add_foreign_key "grants", "aws_auth_secrets"
@@ -316,6 +344,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_11_044016) do
   add_foreign_key "grants", "static_secrets"
   add_foreign_key "grants", "users", column: "created_by_id"
   add_foreign_key "hmac_secrets", "users", column: "created_by_id"
+  add_foreign_key "oauth_apps", "users", column: "created_by_id"
   add_foreign_key "oauth_token_secrets", "users", column: "created_by_id"
   add_foreign_key "pg_dsn_secrets", "users", column: "created_by_id"
   add_foreign_key "principal_roles", "principals"
