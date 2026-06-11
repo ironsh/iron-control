@@ -169,6 +169,17 @@ class ProxySyncControllerTest < ActionDispatch::IntegrationTest
     assert_equal "readonly", entry["role"]
   end
 
+  test "postgres entries carry pinned session settings when configured" do
+    pg = pg_dsn_secrets(:acme_analytics_pg)
+    pg.update!(settings: [ { "name" => "app.tenant", "value" => "centaur" } ])
+
+    post api_v1_proxy_sync_url, params: {}.to_json, headers: auth_headers
+    assert_response :ok
+
+    entry = json_body.fetch("postgres").find { |e| e["foreign_id"] == pg.foreign_id }
+    assert_equal [ { "name" => "app.tenant", "value" => "centaur" } ], entry["settings"]
+  end
+
   test "directly-granted secrets are emitted after role-granted ones" do
     # acme_channel holds github_token_inject and db_password_replace directly
     # (priority 100) and resolves acme_prod_api_key through the acme_infra role

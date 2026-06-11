@@ -148,6 +148,49 @@ module Console
       assert_equal "REPORTING_DSN", secret.dsn_source.config["var"]
     end
 
+    test "POST create captures ordered session settings and drops blank-name rows" do
+      post console_pg_dsn_secrets_url, params: {
+        secret: { namespace: "acme", foreign_id: "ui-settings", database: "settingsdb" },
+        settings: {
+          "0" => { name: "app.tenant", value: "centaur" },
+          "1" => { name: "", value: "ignored" },
+          "2" => { name: "app.region", value: "us" }
+        },
+        source: { source_type: "env", reference: "SETTINGS_DSN" }
+      }
+      secret = PgDsnSecret.find_by!(namespace: "acme", foreign_id: "ui-settings")
+      assert_redirected_to console_secret_path("pg_dsn", secret.oid)
+      assert_equal(
+        [
+          { "name" => "app.tenant", "value" => "centaur" },
+          { "name" => "app.region", "value" => "us" }
+        ],
+        secret.settings
+      )
+    end
+
+    test "PATCH update with no settings rows clears them" do
+      secret = pg_dsn_secrets(:acme_reporting_pg)
+      secret.update!(settings: [ { "name" => "app.tenant", "value" => "centaur" } ])
+      patch console_pg_dsn_secret_url(secret.oid), params: {
+        secret: { namespace: secret.namespace, foreign_id: secret.foreign_id, database: "reporting" },
+        source: { source_type: "env", reference: "REPORTING_DSN" }
+      }
+      assert_redirected_to console_secret_path("pg_dsn", secret.oid)
+      assert_equal [], secret.reload.settings
+    end
+
+    test "POST create rejects an invalid session setting name" do
+      assert_no_difference "PgDsnSecret.count" do
+        post console_pg_dsn_secrets_url, params: {
+          secret: { namespace: "acme", foreign_id: "ui-bad-setting", database: "badsettingdb" },
+          settings: { "0" => { name: "session_authorization", value: "x" } },
+          source: { source_type: "env", reference: "SETTINGS_DSN" }
+        }
+      end
+      assert_response :unprocessable_entity
+    end
+
     # --- gcp_auth ---------------------------------------------------------
 
     test "GET new and edit render without error for gcp_auth" do

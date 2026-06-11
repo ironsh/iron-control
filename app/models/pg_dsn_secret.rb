@@ -18,6 +18,14 @@ class PgDsnSecret < ApplicationRecord
   URL_SAFE_FORMAT = /\A[A-Za-z0-9\-._~]+\z/
   URL_SAFE_MESSAGE = "must contain only URL-safe characters (A-Z, a-z, 0-9, -, ., _, ~)"
 
+  # A Postgres GUC name: a bare identifier, or a dotted class.name custom
+  # variable. Mirrors the proxy's validation so the control plane rejects names
+  # the proxy would refuse to pin.
+  GUC_NAME_FORMAT = /\A[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?\z/
+  # role / session_authorization are managed via the role field and are always
+  # blocked by the proxy's role policy; they may not appear as pinned settings.
+  RESERVED_SETTING_NAMES = %w[role session_authorization].freeze
+
   has_one :dsn_source, class_name: "SecretSource", dependent: :destroy
   has_many :grants, dependent: :destroy
   belongs_to :created_by, class_name: "User"
@@ -34,7 +42,20 @@ class PgDsnSecret < ApplicationRecord
       "dsn" => dsn_source&.to_proxy_source
     }
     entry["role"] = role if role.present?
+    entry["settings"] = proxy_settings if proxy_settings.present?
     entry
+  end
+
+  # The pinned session settings as the proxy expects them: an ordered array of
+  # { "name", "value" } objects. Normalizes whatever shape was stored (string
+  # keys, blank rows) into the canonical form, dropping entries without a name.
+  def proxy_settings
+    Array(settings).filter_map do |s|
+      next unless s.is_a?(Hash)
+      name = s["name"].presence || s[:name].presence
+      next if name.blank?
+      { "name" => name, "value" => (s["value"] || s[:value]).to_s }
+    end
   end
 
   validates :namespace, presence: true, format: { with: URL_SAFE_FORMAT, message: URL_SAFE_MESSAGE }
@@ -42,6 +63,7 @@ class PgDsnSecret < ApplicationRecord
             format: { with: URL_SAFE_FORMAT, message: URL_SAFE_MESSAGE }
   validates :database, presence: true, uniqueness: { scope: :namespace }
   validate :labels_is_a_hash
+  validate :settings_are_valid
   validate :dsn_source_present
   validate :database_matches_inline_dsn
 
@@ -49,6 +71,42 @@ class PgDsnSecret < ApplicationRecord
 
   def labels_is_a_hash
     errors.add(:labels, "must be a hash") unless labels.is_a?(Hash)
+  end
+
+  # Settings must be an array of { name, value } objects with valid, unique GUC
+  # names, mirroring the proxy's compileSettings so an upstream the proxy would
+  # reject can't be saved here. Empty is fine (the default).
+  def settings_are_valid
+    unless settings.is_a?(Array)
+      errors.add(:settings, "must be an array")
+      return
+    end
+    seen = {}
+    settings.each_with_index do |s, i|
+      unless s.is_a?(Hash)
+        errors.add(:settings, "[#{i}] must be an object")
+        next
+      end
+      name = (s["name"] || s[:name]).to_s
+      if name.blank?
+        errors.add(:settings, "[#{i}] name is required")
+        next
+      end
+      unless name.match?(GUC_NAME_FORMAT)
+        errors.add(:settings, "[#{i}] invalid setting name #{name.inspect}")
+        next
+      end
+      lower = name.downcase
+      if RESERVED_SETTING_NAMES.include?(lower)
+        errors.add(:settings, "[#{i}] #{name.inspect} is managed by the proxy; use the role field")
+        next
+      end
+      if seen.key?(lower)
+        errors.add(:settings, "duplicate setting #{name.inspect}")
+        next
+      end
+      seen[lower] = true
+    end
   end
 
   def dsn_source_present

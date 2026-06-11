@@ -106,6 +106,60 @@ class PgDsnSecretTest < ActiveSupport::TestCase
     assert_equal "aws_sm", entry.dig("dsn", "type")
   end
 
+  test "settings default to an empty array and are omitted from to_proxy_dsn" do
+    secret = with_dsn
+    assert_equal [], secret.settings
+    refute secret.to_proxy_dsn.key?("settings")
+  end
+
+  test "to_proxy_dsn carries settings as an ordered array of name/value objects" do
+    secret = with_dsn(PgDsnSecret.new(base_attrs(settings: [
+      { "name" => "app.tenant", "value" => "centaur" },
+      { "name" => "app.region", "value" => "us" }
+    ])))
+    assert secret.valid?
+    assert_equal(
+      [
+        { "name" => "app.tenant", "value" => "centaur" },
+        { "name" => "app.region", "value" => "us" }
+      ],
+      secret.to_proxy_dsn["settings"]
+    )
+  end
+
+  test "settings with a valid empty value are accepted and stringified" do
+    secret = with_dsn(PgDsnSecret.new(base_attrs(settings: [ { "name" => "app.tenant", "value" => "" } ])))
+    assert secret.valid?
+    assert_equal "", secret.to_proxy_dsn.dig("settings", 0, "value")
+  end
+
+  test "a setting with a blank name is rejected" do
+    secret = with_dsn(PgDsnSecret.new(base_attrs(settings: [ { "name" => "", "value" => "x" } ])))
+    assert_not secret.valid?
+    assert_includes secret.errors[:settings], "[0] name is required"
+  end
+
+  test "a setting with an invalid GUC name is rejected" do
+    secret = with_dsn(PgDsnSecret.new(base_attrs(settings: [ { "name" => "bad name!", "value" => "x" } ])))
+    assert_not secret.valid?
+    assert_includes secret.errors[:settings], %([0] invalid setting name "bad name!")
+  end
+
+  test "the reserved role setting name is rejected" do
+    secret = with_dsn(PgDsnSecret.new(base_attrs(settings: [ { "name" => "ROLE", "value" => "x" } ])))
+    assert_not secret.valid?
+    assert_includes secret.errors[:settings], %([0] "ROLE" is managed by the proxy; use the role field)
+  end
+
+  test "duplicate setting names (case-insensitive) are rejected" do
+    secret = with_dsn(PgDsnSecret.new(base_attrs(settings: [
+      { "name" => "app.tenant", "value" => "a" },
+      { "name" => "App.Tenant", "value" => "b" }
+    ])))
+    assert_not secret.valid?
+    assert_includes secret.errors[:settings], %(duplicate setting "App.Tenant")
+  end
+
   test "declares pgs as its oid prefix" do
     assert_equal "pgs", PgDsnSecret.oid_prefix
   end
