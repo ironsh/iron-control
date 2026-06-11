@@ -41,6 +41,12 @@
           <%= field_error(app, :provider) %>
         </div>
         <div>
+          <label class="form-label" for="oauth_app_slug">Slug *</label>
+          <%= text_field_tag "oauth_app[slug]", app.slug, id: "oauth_app_slug", class: "form-input #{field_error_class(app, :slug)}", placeholder: "google" %>
+          <%= field_error(app, :slug) %>
+          <p class="form-hint">Globally unique. Names the well-known link: <code>/oauth/&lt;slug&gt;/start</code>.</p>
+        </div>
+        <div>
           <label class="form-label" for="oauth_app_client_id">Client ID *</label>
           <%= text_field_tag "oauth_app[client_id]", app.client_id, id: "oauth_app_client_id", class: "form-input #{field_error_class(app, :client_id)}" %>
           <%= field_error(app, :client_id) %>
@@ -69,12 +75,6 @@
           <%= text_area_tag "oauth_app[allowed_scopes]", Array(app.allowed_scopes).join("\n"), id: "oauth_app_allowed_scopes", rows: 3, class: "form-input #{field_error_class(app, :allowed_scopes)}", placeholder: "https://www.googleapis.com/auth/gmail.readonly" %>
           <%= field_error(app, :allowed_scopes) %>
           <p class="form-hint">One scope per line. A flow's requested scopes must be a subset; omitting them requests all of these.</p>
-        </div>
-        <div>
-          <label class="form-label" for="oauth_app_allowed_return_urls">Allowed return URLs *</label>
-          <%= text_area_tag "oauth_app[allowed_return_urls]", Array(app.allowed_return_urls).join("\n"), id: "oauth_app_allowed_return_urls", rows: 3, class: "form-input #{field_error_class(app, :allowed_return_urls)}", placeholder: "https://app.example/oauth/callback" %>
-          <%= field_error(app, :allowed_return_urls) %>
-          <p class="form-hint">One URL prefix per line. The first is the default when a flow omits return_to. http is allowed only for localhost.</p>
         </div>
         <div class="flex items-center gap-2">
           <%= check_box_tag "oauth_app[enabled]", "1", app.enabled, id: "oauth_app_enabled", class: "h-4 w-4" %>

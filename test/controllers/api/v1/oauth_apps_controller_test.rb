@@ -14,9 +14,8 @@ module Api
       def valid_body(**overrides)
         { data: {
           namespace: "acme", foreign_id: "api-google",
-          provider: "google", client_id: "the-client-id", client_secret: "the-secret",
+          provider: "google", slug: "api-google", client_id: "the-client-id", client_secret: "the-secret",
           allowed_scopes: [ "https://www.googleapis.com/auth/gmail.readonly" ],
-          allowed_return_urls: [ "https://app.acme.example/cb" ],
           credential_namespace: "acme"
         }.merge(overrides) }
       end

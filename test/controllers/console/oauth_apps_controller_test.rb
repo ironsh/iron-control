@@ -29,10 +29,9 @@ module Console
         post console_oauth_app_forms_url, params: {
           oauth_app: {
             namespace: "acme", foreign_id: "new-google", name: "New Google",
-            provider: "google", client_id: "cid", client_secret: "shh",
+            provider: "google", slug: "new-google", client_id: "cid", client_secret: "shh",
             credential_namespace: "acme", enabled: "1",
-            allowed_scopes: "https://www.googleapis.com/auth/gmail.readonly\nhttps://www.googleapis.com/auth/calendar.readonly\n",
-            allowed_return_urls: "https://app.acme.example/cb\n"
+            allowed_scopes: "https://www.googleapis.com/auth/gmail.readonly\nhttps://www.googleapis.com/auth/calendar.readonly\n"
           },
           labels: { "0" => { key: "team", value: "comms" } }
         }
@@ -43,8 +42,8 @@ module Console
       assert_equal "google", app.provider
       assert_equal "cid", app.client_id
       assert_equal "shh", app.client_secret
+      assert_equal "new-google", app.slug
       assert_equal %w[https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly], app.allowed_scopes
-      assert_equal %w[https://app.acme.example/cb], app.allowed_return_urls
       assert_equal({ "team" => "comms" }, app.labels)
       assert app.enabled?
       assert_equal @operator, app.created_by
@@ -54,8 +53,8 @@ module Console
       assert_no_difference -> { OauthApp.count } do
         post console_oauth_app_forms_url, params: {
           oauth_app: {
-            namespace: "acme", provider: "github", client_id: "cid", client_secret: "shh",
-            allowed_scopes: "a", allowed_return_urls: "https://app.acme.example/cb"
+            namespace: "acme", provider: "github", slug: "gh", client_id: "cid", client_secret: "shh",
+            allowed_scopes: "a"
           }
         }
       end
@@ -66,8 +65,8 @@ module Console
       assert_no_difference -> { OauthApp.count } do
         post console_oauth_app_forms_url, params: {
           oauth_app: {
-            namespace: "acme", provider: "google", client_id: "cid", client_secret: "shh",
-            allowed_scopes: "", allowed_return_urls: "https://app.acme.example/cb"
+            namespace: "acme", provider: "google", slug: "no-scopes", client_id: "cid", client_secret: "shh",
+            allowed_scopes: ""
           }
         }
       end
@@ -82,8 +81,7 @@ module Console
           namespace: app.namespace, foreign_id: app.foreign_id, name: "Renamed",
           provider: "google", client_id: "new-cid", credential_namespace: app.credential_namespace,
           enabled: "0",
-          allowed_scopes: "https://www.googleapis.com/auth/gmail.readonly",
-          allowed_return_urls: "https://app.acme.example/new-cb"
+          allowed_scopes: "https://www.googleapis.com/auth/gmail.readonly"
         }
       }
       assert_redirected_to console_oauth_app_path(app.oid)
@@ -92,7 +90,6 @@ module Console
       assert_equal "new-cid", app.client_id
       refute app.enabled?
       assert_equal %w[https://www.googleapis.com/auth/gmail.readonly], app.allowed_scopes
-      assert_equal %w[https://app.acme.example/new-cb], app.allowed_return_urls
     end
 
     test "PATCH update with a blank client_secret keeps the stored value" do
@@ -103,8 +100,7 @@ module Console
           namespace: app.namespace, foreign_id: app.foreign_id,
           provider: "google", client_id: app.client_id, client_secret: "",
           credential_namespace: app.credential_namespace, enabled: "1",
-          allowed_scopes: Array(app.allowed_scopes).join("\n"),
-          allowed_return_urls: Array(app.allowed_return_urls).join("\n")
+          allowed_scopes: Array(app.allowed_scopes).join("\n")
         }
       }
       assert_redirected_to console_oauth_app_path(app.oid)

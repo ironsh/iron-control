@@ -155,7 +155,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_11_120100) do
   end
 
   create_table "oauth_apps", force: :cascade do |t|
-    t.jsonb "allowed_return_urls", default: [], null: false
     t.jsonb "allowed_scopes", default: [], null: false
     t.string "client_id", null: false
     t.text "client_secret"
@@ -169,10 +168,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_11_120100) do
     t.string "name"
     t.string "namespace", default: "default", null: false
     t.string "provider", null: false
+    t.string "slug", null: false
     t.datetime "updated_at", null: false
     t.index ["created_by_id"], name: "index_oauth_apps_on_created_by_id"
     t.index ["labels"], name: "index_oauth_apps_on_labels", using: :gin
     t.index ["namespace", "foreign_id"], name: "index_oauth_apps_on_namespace_and_foreign_id", unique: true
+    t.index ["slug"], name: "index_oauth_apps_on_slug", unique: true
   end
 
   create_table "oauth_token_secrets", force: :cascade do |t|

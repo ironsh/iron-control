@@ -47,9 +47,9 @@ module Api
       private
 
       def assign_and_save!(app, attrs)
-        base = attrs.permit(:namespace, :foreign_id, :name, :description, :provider,
+        base = attrs.permit(:namespace, :foreign_id, :name, :description, :provider, :slug,
                             :client_id, :client_secret, :credential_namespace, :enabled,
-                            labels: {}, allowed_scopes: [], allowed_return_urls: [])
+                            labels: {}, allowed_scopes: [])
         # A PUT upsert by foreign_id sets identity before assignment; a blank body
         # value must not wipe it.
         base.delete(:foreign_id) if base[:foreign_id].blank? && app.foreign_id.present?
@@ -74,10 +74,10 @@ module Api
           description: app.description,
           labels: app.labels,
           provider: app.provider,
+          slug: app.slug,
           client_id: app.client_id,
           client_secret_set: app.client_secret.present?,
           allowed_scopes: app.allowed_scopes,
-          allowed_return_urls: app.allowed_return_urls,
           credential_namespace: app.credential_namespace,
           enabled: app.enabled,
           created_at: app.created_at,

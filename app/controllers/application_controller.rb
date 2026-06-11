@@ -17,10 +17,10 @@ class ApplicationController < ActionController::Base
     ENV["IRON_CONTROL_PUBLIC_URL"].presence || request.base_url
   end
 
-  # The single OAuth callback redirect URI registered with the IdP for
-  # +provider_key+: "<public base>/oauth/<provider>/callback".
-  def oauth_callback_redirect_uri(provider_key)
-    URI.join(public_base_url, "/oauth/#{provider_key}/callback").to_s
+  # The OAuth callback redirect URI registered with the IdP for an app:
+  # "<public base>/oauth/<slug>/callback". One per app, keyed by its slug.
+  def oauth_callback_redirect_uri(slug)
+    URI.join(public_base_url, "/oauth/#{slug}/callback").to_s
   end
 
   # Gate every UI route behind a console session by default. Controllers that

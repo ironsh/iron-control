@@ -112,7 +112,7 @@ class ConsoleControllerTest < ActionDispatch::IntegrationTest
     assert_select "dd", text: app.client_id
     assert_select "dd", text: "set" # client secret presence, never the value
     assert_includes response.body, "/oauth/google/callback"
-    assert_includes response.body, "/oauth/google/start?app=acme/google-app"
+    assert_includes response.body, "/oauth/google/start"
   end
 
   test "oauth app detail page 404s for an unknown id" do

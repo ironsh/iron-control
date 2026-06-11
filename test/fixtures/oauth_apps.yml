@@ -8,13 +8,11 @@ acme_google:
   labels:
     team: comms
   provider: google
+  slug: google
   client_id: acme-google-client-id
   allowed_scopes:
     - https://www.googleapis.com/auth/gmail.readonly
     - https://www.googleapis.com/auth/calendar.readonly
-  allowed_return_urls:
-    - https://app.acme.example/oauth/callback
-    - https://app.acme.example/settings
   credential_namespace: acme
   enabled: true
   created_by: acme_admin
@@ -24,11 +22,10 @@ acme_google_disabled:
   foreign_id: google-app-disabled
   name: Acme Google (disabled)
   provider: google
+  slug: google-disabled
   client_id: acme-google-disabled-client-id
   allowed_scopes:
     - https://www.googleapis.com/auth/gmail.readonly
-  allowed_return_urls:
-    - https://app.acme.example/oauth/callback
   credential_namespace: acme
   enabled: false
   created_by: acme_admin

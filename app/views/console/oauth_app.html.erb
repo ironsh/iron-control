@@ -52,28 +52,27 @@
     end
   end
 
-  app_handle = @oauth_app.foreign_id.present? ? "#{@oauth_app.namespace}/#{@oauth_app.foreign_id}" : @oauth_app.oid
-  redirect_uri = oauth_callback_redirect_uri(@oauth_app.provider)
-  start_template = "#{public_base_url}/oauth/#{@oauth_app.provider}/start?app=#{app_handle}&user=<USER_KEY>&return_to=<RETURN_URL>"
+  redirect_uri = oauth_callback_redirect_uri(@oauth_app.slug)
+  start_url = "#{public_base_url}/oauth/#{@oauth_app.slug}/start"
 %>
 
 <%= def_section.call("OAuth Client", [
   [ "Provider", @oauth_app.provider ],
+  [ "Slug", @oauth_app.slug ],
   [ "Client ID", @oauth_app.client_id ],
   [ "Client secret", @oauth_app.client_secret.present? ? "set" : "not set" ],
   [ "Credential namespace", @oauth_app.credential_namespace ]
 ]) %>
 
 <%= def_section.call("Flow Config", [
-  [ "Allowed scopes", Array(@oauth_app.allowed_scopes).join("\n") ],
-  [ "Allowed return URLs", Array(@oauth_app.allowed_return_urls).join("\n") ]
+  [ "Allowed scopes", Array(@oauth_app.allowed_scopes).join("\n") ]
 ]) %>
 
 <%= def_section.call("Consent Flow", [
   [ "Redirect URI", redirect_uri ],
-  [ "Start URL", start_template ]
+  [ "Start URL", start_url ]
 ]) %>
-<p class="-mt-6 mb-8 text-xs text-zinc-600">Register the redirect URI with the provider. The start URL is the template to send end users to (fill in the user key and return URL).</p>
+<p class="-mt-6 mb-8 text-xs text-zinc-600">Register the redirect URI with the provider. Share the start URL with a team member to connect the integration.</p>
 
 <section class="mb-8">
   <h2 class="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Minted Credentials</h2>

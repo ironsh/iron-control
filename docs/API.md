@@ -745,7 +745,7 @@ Read-only fields are returned but never accepted in requests:
 | `oauth_app_id`                | The [OAuth app](#oauth-apps) that minted this credential through the consent flow, or `null` for a standalone credential. |
 | `provider_subject`            | The IdP-stable account id (Google `sub`) for a flow-minted credential. |
 | `provider_email`              | The account email captured at consent time. |
-| `external_user_key`           | The opaque `user` key passed to the start endpoint, if any. |
+| `external_user_key`           | An opaque key generated for the credential when it is minted by the consent flow. |
 
 The minted `access_token`, the `refresh_token`, the `client_secret`, and the `token_endpoint_headers` values are never returned in any response.
 
@@ -835,7 +835,7 @@ When a refresh fails unrecoverably (for example the IdP returns `invalid_grant` 
 
 ## OAuth apps
 
-An OAuth app registers an OAuth client (provider, client id, and client secret) and the policy that bounds the public [consent flow](#oauth-consent-flow) it drives. End users of a customer application are sent through the consent flow, and each completed consent mints (or updates) a [broker credential](#broker-credentials) linked back to the app. The minted credential is refreshed by the normal broker loop and delegates its `client_id` / `client_secret` to the app.
+An OAuth app registers an OAuth client (provider, client id, and client secret) and the scopes its [consent flow](#oauth-consent-flow) requests. Each app has a globally-unique `slug` that names its well-known consent links. A team member who knows the integration (for example `google`) opens `/oauth/<slug>/start`, consents, and each completed consent mints (or updates) a [broker credential](#broker-credentials) linked back to the app. The minted credential is refreshed by the normal broker loop and delegates its `client_id` / `client_secret` to the app.
 
 Only managing the app's configuration requires API key auth. The consent flow endpoints themselves are unauthenticated and live on iron-control's own domain (see [OAuth consent flow](#oauth-consent-flow)).
 
@@ -850,10 +850,10 @@ Google is the only supported provider in this release. The `provider` field is v
 | `name`, `description`  | optional    | |
 | `labels`               | optional    | |
 | `provider`             | required    | The provider strategy. Currently only `"google"`. |
+| `slug`                 | required    | Globally-unique, URL-safe name for the well-known consent links (`/oauth/<slug>/start`). |
 | `client_id`            | required    | OAuth client id. Not secret; returned in responses. |
 | `client_secret`        | required on create | OAuth client secret. Write-only and encrypted at rest; on update it is only changed when supplied. Never returned. |
-| `allowed_scopes`       | required    | Non-empty array of scope strings the start endpoint may request. A flow's requested scopes must be a subset; omitting them requests all of these. |
-| `allowed_return_urls`  | required    | Non-empty array of return-URL prefixes the callback may redirect to. The first is the default when a flow omits `return_to`. Each must be an absolute `http(s)` URL with a host; `http` is allowed only for `localhost` / `127.0.0.1`. |
+| `allowed_scopes`       | required    | Non-empty array of scope strings the start endpoint requests. A flow's optional `scopes` param must be a subset; omitting it requests all of these. |
 | `credential_namespace` | optional    | Namespace for credentials minted by this app's flows. Defaults to `"default"`. |
 | `enabled`              | optional    | Defaults to `true`. A disabled app rejects new consent flows; existing credentials keep refreshing. |
 
@@ -874,10 +874,10 @@ Read-only fields:
     "foreign_id": "gmail-app",
     "name": "Gmail",
     "provider": "google",
+    "slug": "google",
     "client_id": "1234.apps.googleusercontent.com",
     "client_secret": "GOCSPX-...",
     "allowed_scopes": ["https://www.googleapis.com/auth/gmail.readonly"],
-    "allowed_return_urls": ["https://app.example.com/oauth/callback"],
     "credential_namespace": "default"
   }
 }
@@ -895,10 +895,10 @@ Returns `201`. The `client_secret` is never echoed back:
     "description": null,
     "labels": {},
     "provider": "google",
+    "slug": "google",
     "client_id": "1234.apps.googleusercontent.com",
     "client_secret_set": true,
     "allowed_scopes": ["https://www.googleapis.com/auth/gmail.readonly"],
-    "allowed_return_urls": ["https://app.example.com/oauth/callback"],
     "credential_namespace": "default",
     "enabled": true,
     "created_at": "2026-06-01T10:00:00Z",
@@ -919,12 +919,12 @@ Returns `201`. The `client_secret` is never echoed back:
 
 ## OAuth consent flow
 
-The consent flow turns an end user's OAuth consent into a managed broker credential. It runs on iron-control's own domain and is deliberately unauthenticated: end users of a customer app reach it with nothing but a URL. Safety comes from the consent itself (a credential is only created after a successful code exchange), the per-app return-URL allowlist, and upsert-on-reconsent (re-consenting for the same provider account updates the existing credential instead of creating a new one).
+The consent flow turns a team member's OAuth consent into a managed broker credential. It runs on iron-control's own domain and is deliberately unauthenticated: the member reaches it with a single well-known link keyed by the app's `slug`. There is no external app to integrate with, so the start endpoint takes no `user` or `return_to`: after consent the member lands on an iron-control result page, and the credential's `external_user_key` is generated automatically. Safety comes from the consent itself (a credential is only created after a successful code exchange) and upsert-on-reconsent (re-consenting for the same provider account updates the existing credential instead of creating a new one).
 
-Exactly one redirect URI is registered with the IdP per provider:
+One redirect URI is registered with the IdP per app, keyed by its slug:
 
 ```
-https://<iron-control>/oauth/<provider>/callback
+https://<iron-control>/oauth/<slug>/callback
 ```
 
 By default the redirect URI and the flow's own origin are derived from the request. Set `IRON_CONTROL_PUBLIC_URL` to override the origin for deployments behind a proxy whose `Host` header does not match the public origin.
@@ -932,29 +932,28 @@ By default the redirect URI and the flow's own origin are derived from the reque
 ### Start
 
 ```
-GET https://<iron-control>/oauth/<provider>/start
+GET https://<iron-control>/oauth/<slug>/start
 ```
 
-| Param       | Notes |
-| ----------- | ----- |
-| `app`       | Required. The OAuth app, as its OID (`oap_…`) or as `<namespace>/<foreign_id>`. |
-| `user`      | Optional opaque key identifying the customer app's end user. URL-safe, at most 128 characters. Stored on the minted credential as `external_user_key`. |
-| `scopes`    | Optional, space- or comma-separated. Must be a subset of the app's `allowed_scopes`; defaults to all of them. |
-| `return_to` | Optional. Must match the app's `allowed_return_urls`; defaults to the first allowlist entry. |
+`<slug>` names the app (for example `google`). The provider is derived from the app.
 
-On success the endpoint redirects the browser to the provider's consent screen. Bad input (unknown app, disabled app, scope or `return_to` outside the allowlist, malformed `user`) returns a plain-text `4xx` and does not redirect.
+| Param    | Notes |
+| -------- | ----- |
+| `scopes` | Optional, space- or comma-separated. Must be a subset of the app's `allowed_scopes`; defaults to all of them. |
 
-### Callback and return markers
+On success the endpoint redirects the browser to the provider's consent screen. An unknown slug returns `404`; a disabled app or a scope outside the allowlist renders a `4xx` result page.
 
-After consent the provider redirects back to the callback, which exchanges the code, mints or updates the credential, and then redirects to `return_to` with one of these markers appended (existing query parameters on `return_to` are preserved):
+### Callback and result page
 
-| Marker | Meaning |
-| ------ | ------- |
-| `oauth=success&credential=<bcr_…>` | A credential was minted or updated. `credential` is its OID. |
-| `oauth=denied&error=<code>` | The user declined (or another IdP-side error). `error` is the IdP error code (e.g. `access_denied`). |
-| `oauth=error&error=<code>` | The code exchange or identity check failed. `error` is the failure code (e.g. `invalid_grant`, `credential_save_failed`). |
+After consent the provider redirects back to `/oauth/<slug>/callback`, which exchanges the code, mints or updates the credential, and renders an iron-control result page:
 
-A tampered, expired, or missing flow state or cookie returns a plain-text `400` rather than redirecting.
+| Outcome  | Page | Status |
+| -------- | ---- | ------ |
+| Success  | Confirms the integration is connected and shows the credential OID. | `200` |
+| Denied   | The user declined (or another IdP-side error). | `422` |
+| Error    | The code exchange or identity check failed (e.g. `invalid_grant`). | `422` |
+
+A tampered, expired, or missing flow state or cookie renders an error page with `400`.
 
 ### Supported providers
 

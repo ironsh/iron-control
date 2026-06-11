@@ -11,18 +11,20 @@ class CreateOauthApps < ActiveRecord::Migration[8.1]
       # Which provider strategy drives this app's consent flows ("google").
       t.string :provider, null: false
 
+      # Globally-unique URL name for the app's well-known consent links:
+      # /oauth/<slug>/start and /oauth/<slug>/callback. Distinct from
+      # namespace/foreign_id (which address the app in the API) so the public
+      # link is a single short token a team member can recognize ("google").
+      t.string :slug, null: false
+
       # OAuth client. client_id is not secret; client_secret is encrypted at the
       # model layer.
       t.string :client_id, null: false
       t.text :client_secret
 
-      # Scopes the start endpoint may request. The flow's `scopes` param must be a
-      # subset; when omitted, all allowed scopes are requested.
+      # Scopes the start endpoint requests. When the flow omits its optional
+      # `scopes` param, all of these are requested.
       t.jsonb :allowed_scopes, null: false, default: []
-
-      # Allowlist of return-URL prefixes the callback may redirect to. The first
-      # entry is the default when the flow omits return_to.
-      t.jsonb :allowed_return_urls, null: false, default: []
 
       # Namespace for broker credentials minted by this app's flows.
       t.string :credential_namespace, null: false, default: "default"
@@ -36,6 +38,7 @@ class CreateOauthApps < ActiveRecord::Migration[8.1]
     end
 
     add_index :oauth_apps, [ :namespace, :foreign_id ], unique: true
+    add_index :oauth_apps, :slug, unique: true
     add_index :oauth_apps, :labels, using: :gin
   end
 end

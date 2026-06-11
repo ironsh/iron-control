@@ -41,14 +41,13 @@ module Console
     # value in place (same pattern as BrokerCredentialsController).
     def assign_form(app)
       fields = app_params.permit(:namespace, :foreign_id, :name, :description,
-                                 :provider, :client_id, :credential_namespace)
+                                 :provider, :slug, :client_id, :credential_namespace)
       fields[:namespace] = fields[:namespace].presence || "default"
       fields[:foreign_id] = fields[:foreign_id].presence
       fields[:credential_namespace] = fields[:credential_namespace].presence || "default"
       app.assign_attributes(fields)
       app.enabled = app_params[:enabled] == "1"
       app.allowed_scopes = line_list(app_params[:allowed_scopes])
-      app.allowed_return_urls = line_list(app_params[:allowed_return_urls])
       app.labels = label_params
 
       secret = app_params[:client_secret]
@@ -59,8 +58,8 @@ module Console
       params.fetch(:oauth_app, ActionController::Parameters.new)
     end
 
-    # Scopes and return URLs are entered one per line (neither contains spaces);
-    # blank lines dropped.
+    # Scopes are entered one per line (they contain no spaces); blank lines
+    # dropped.
     def line_list(raw)
       raw.to_s.split(/\r?\n/).map(&:strip).reject(&:blank?)
     end

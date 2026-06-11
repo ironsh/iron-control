@@ -35,9 +35,9 @@ module Broker
   # Raised by AuthorizationCodeClient (and the provider identity extraction) when
   # a one-shot consent-flow code exchange fails. Unlike RefreshError it carries no
   # `retryable` flag: a consent flow is synchronous and any failure surfaces to
-  # the end user as a redirect with an error marker rather than entering a
-  # backoff loop. `code` is an OAuth error code or a flow-specific marker
-  # (e.g. "missing_refresh_token", "id_token_aud_mismatch").
+  # the user as an error result page rather than entering a backoff loop. `code`
+  # is an OAuth error code or a flow-specific marker (e.g. "missing_refresh_token",
+  # "id_token_aud_mismatch").
   class ExchangeError < Error
     STAGES = %w[network http oauth parse].freeze
 
@@ -50,8 +50,8 @@ module Broker
       @status = status
     end
 
-    # The label used in the return_to redirect's error marker: the OAuth/flow
-    # error code when present, else the stage.
+    # The label shown on the flow's error result page: the OAuth/flow error code
+    # when present, else the stage.
     def reason = code.presence || stage
   end
 end

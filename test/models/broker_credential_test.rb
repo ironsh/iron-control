@@ -43,8 +43,9 @@ class BrokerCredentialTest < ActiveSupport::TestCase
   def build_app(**overrides)
     OauthApp.create!({
       namespace: "default", foreign_id: "app-#{SecureRandom.hex(4)}",
-      provider: "google", client_id: "app-cid", client_secret: "app-secret",
-      allowed_scopes: %w[a b], allowed_return_urls: %w[https://app.example/cb],
+      provider: "google", slug: "slug-#{SecureRandom.hex(4)}",
+      client_id: "app-cid", client_secret: "app-secret",
+      allowed_scopes: %w[a b],
       credential_namespace: "default", created_by: users(:acme_admin)
     }.merge(overrides))
   end
