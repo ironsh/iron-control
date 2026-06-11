@@ -155,6 +155,68 @@ module Api
         assert_equal "writer", secret.role
       end
 
+      test "POST persists session settings and echoes them back" do
+        body = {
+          data: {
+            namespace: "acme",
+            foreign_id: "settings-pg",
+            database: "settings-db",
+            settings: [
+              { name: "app.tenant", value: "centaur" },
+              { name: "app.region", value: "us" }
+            ],
+            dsn: { source_type: "env", config: { var: "SETTINGS_DSN" } }
+          }
+        }
+
+        post api_v1_pg_dsn_secrets_url, params: body.to_json, headers: auth_headers
+        assert_response :created
+
+        assert_equal(
+          [
+            { "name" => "app.tenant", "value" => "centaur" },
+            { "name" => "app.region", "value" => "us" }
+          ],
+          json_body.dig("data", "settings")
+        )
+        secret = PgDsnSecret.find_by_oid(json_body.dig("data", "id"))
+        assert_equal "app.tenant", secret.settings.first["name"]
+      end
+
+      test "POST with an invalid setting name is rejected" do
+        body = {
+          data: {
+            namespace: "acme",
+            foreign_id: "bad-settings-pg",
+            database: "bad-settings-db",
+            settings: [ { name: "role", value: "x" } ],
+            dsn: { source_type: "env", config: { var: "BAD_DSN" } }
+          }
+        }
+
+        assert_no_difference -> { PgDsnSecret.count } do
+          post api_v1_pg_dsn_secrets_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :unprocessable_entity
+      end
+
+      test "PUT replaces settings as a whole" do
+        secret = pg_dsn_secrets(:acme_analytics_pg)
+        secret.update!(settings: [ { "name" => "app.old", "value" => "1" } ])
+        body = {
+          data: {
+            settings: [ { name: "app.new", value: "2" } ],
+            dsn: { source_type: "env", config: { var: "PG_ANALYTICS_DSN" } }
+          }
+        }
+
+        put api_v1_pg_dsn_secret_url(id: secret.oid), params: body.to_json, headers: auth_headers
+        assert_response :ok
+
+        secret.reload
+        assert_equal [ { "name" => "app.new", "value" => "2" } ], secret.settings
+      end
+
       test "PUT upserts a new pg_dsn secret by foreign_id" do
         body = {
           data: {

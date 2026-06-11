@@ -3,11 +3,11 @@
     {
       "warning_type": "Mass Assignment",
       "warning_code": 70,
-      "fingerprint": "4d16cc7473edcb8465102bb71cf4c19ca63833dadd4b6406687a6accb3f6e81b",
+      "fingerprint": "4ad963177daac9e61d26878a119fc812504667b5e70cacedae99ee2013ff7fbd",
       "check_name": "PermitAttributes",
       "message": "Potentially dangerous key allowed for mass assignment",
       "file": "app/controllers/api/v1/pg_dsn_secrets_controller.rb",
-      "line": 37,
+      "line": 51,
       "link": "https://brakemanscanner.org/docs/warning_types/mass_assignment/",
       "code": null,
       "render_path": null,
