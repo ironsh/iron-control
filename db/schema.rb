@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_08_210002) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_11_044016) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -100,6 +100,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_08_210002) do
     t.bigint "oauth_token_secret_id"
     t.bigint "pg_dsn_secret_id"
     t.bigint "principal_id"
+    t.integer "priority", null: false
     t.bigint "role_id"
     t.bigint "static_secret_id"
     t.datetime "updated_at", null: false

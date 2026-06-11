@@ -169,6 +169,33 @@ class ProxySyncControllerTest < ActionDispatch::IntegrationTest
     assert_equal "readonly", entry["role"]
   end
 
+  test "directly-granted secrets are emitted after role-granted ones" do
+    # acme_channel holds github_token_inject and db_password_replace directly
+    # (priority 100) and resolves acme_prod_api_key through the acme_infra role
+    # (priority 0). Give the role secret a source so it materializes; lower
+    # priority is emitted first, so the direct secrets win iron-proxy's
+    # last-transform-wins.
+    prod = static_secrets(:acme_prod_api_key)
+    SecretSource.create!(source_type: "env", config: { "var" => "PROD_API_KEY" }, static_secret: prod)
+
+    post api_v1_proxy_sync_url, params: {}.to_json, headers: auth_headers
+    assert_response :ok
+
+    ids = json_body.fetch("secrets").map { |s| s.dig("source", "var") || s.dig("source", "type") }
+    role_index = ids.index("PROD_API_KEY")
+    refute_nil role_index
+    [ "GITHUB_TOKEN", "control_plane" ].each do |direct|
+      assert_operator ids.index(direct), :>, role_index
+    end
+
+    # Promote the role grant above the direct grants and it now sorts last.
+    grants(:acme_infra_prod_api_key).update!(priority: 500)
+    post api_v1_proxy_sync_url, params: {}.to_json, headers: auth_headers
+    assert_response :ok
+    bumped = json_body.fetch("secrets").map { |s| s.dig("source", "var") || s.dig("source", "type") }
+    assert_equal "PROD_API_KEY", bumped.last
+  end
+
   test "an unassigned proxy syncs an empty config with unassigned status" do
     unassigned_token = "iprx_#{'c' * 64}"
     post api_v1_proxy_sync_url, params: {}.to_json, headers: auth_headers(unassigned_token)
