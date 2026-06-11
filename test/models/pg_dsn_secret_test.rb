@@ -157,7 +157,7 @@ class PgDsnSecretTest < ActiveSupport::TestCase
       { "name" => "App.Tenant", "value" => "b" }
     ])))
     assert_not secret.valid?
-    assert_includes secret.errors[:settings], %(duplicate setting "App.Tenant")
+    assert_includes secret.errors[:settings], %([1] duplicate setting "App.Tenant")
   end
 
   test "declares pgs as its oid prefix" do

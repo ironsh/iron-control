@@ -77,36 +77,29 @@ class PgDsnSecret < ApplicationRecord
   # names, mirroring the proxy's compileSettings so an upstream the proxy would
   # reject can't be saved here. Empty is fine (the default).
   def settings_are_valid
-    unless settings.is_a?(Array)
-      errors.add(:settings, "must be an array")
-      return
+    return errors.add(:settings, "must be an array") unless settings.is_a?(Array)
+
+    seen = Set.new
+    settings.each_with_index do |setting, i|
+      reason = setting_error(setting, seen)
+      errors.add(:settings, "[#{i}] #{reason}") if reason
     end
-    seen = {}
-    settings.each_with_index do |s, i|
-      unless s.is_a?(Hash)
-        errors.add(:settings, "[#{i}] must be an object")
-        next
-      end
-      name = (s["name"] || s[:name]).to_s
-      if name.blank?
-        errors.add(:settings, "[#{i}] name is required")
-        next
-      end
-      unless name.match?(GUC_NAME_FORMAT)
-        errors.add(:settings, "[#{i}] invalid setting name #{name.inspect}")
-        next
-      end
-      lower = name.downcase
-      if RESERVED_SETTING_NAMES.include?(lower)
-        errors.add(:settings, "[#{i}] #{name.inspect} is managed by the proxy; use the role field")
-        next
-      end
-      if seen.key?(lower)
-        errors.add(:settings, "duplicate setting #{name.inspect}")
-        next
-      end
-      seen[lower] = true
-    end
+  end
+
+  # Why setting is invalid, or nil when it's well-formed. Records the lowercased
+  # name in seen so a later occurrence is reported as a duplicate.
+  def setting_error(setting, seen)
+    return "must be an object" unless setting.is_a?(Hash)
+
+    name = (setting["name"] || setting[:name]).to_s
+    return "name is required" if name.blank?
+    return "invalid setting name #{name.inspect}" unless name.match?(GUC_NAME_FORMAT)
+
+    lower = name.downcase
+    return "#{name.inspect} is managed by the proxy; use the role field" if RESERVED_SETTING_NAMES.include?(lower)
+    return "duplicate setting #{name.inspect}" unless seen.add?(lower)
+
+    nil
   end
 
   def dsn_source_present
