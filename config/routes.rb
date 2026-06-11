@@ -27,6 +27,11 @@ Rails.application.routes.draw do
   end
   get "console/secrets/:kind/:id", to: "console#secret", as: :console_secret
   get "console/credentials", to: "console#credentials", as: :console_credentials
+  # Create/edit form for broker credentials. Declared before the show route so
+  # /console/credentials/new wins over the generic `:id` match.
+  namespace :console do
+    resources :broker_credentials, only: %i[new create edit update], path: "credentials"
+  end
   get "console/credentials/:id", to: "console#credential", as: :console_credential
 
   namespace :api do

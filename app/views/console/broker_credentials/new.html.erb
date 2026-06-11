@@ -1,0 +1,12 @@
+<% content_for :title, "New credential · Iron Control" %>
+
+<div class="mb-8">
+  <a href="<%= console_credentials_path %>" class="text-xs text-zinc-500 hover:text-iron-400">← back to credentials</a>
+  <div class="mt-2 flex flex-wrap items-center gap-3">
+    <h1 class="text-2xl font-bold text-zinc-100">New credential</h1>
+    <span class="rounded-md bg-iron-500/10 px-2 py-0.5 text-xs font-medium text-iron-300 ring-1 ring-iron-500/25">Broker</span>
+  </div>
+</div>
+
+<%= render "errors", credential: @credential %>
+<%= render "form", credential: @credential %>
