@@ -10,7 +10,7 @@ module Console
 
     layout "console"
 
-    before_action :set_credential, only: %i[edit update]
+    before_action :set_credential, only: %i[edit update destroy]
 
     def new
       @credential = BrokerCredential.new(namespace: "default")
@@ -34,6 +34,18 @@ module Console
         redirect_to console_credential_path(@credential.oid), notice: "Credential updated."
       else
         render :edit, status: :unprocessable_entity
+      end
+    end
+
+    # The model's before_destroy guard throws :abort (adding an error) when a
+    # token_broker source still references the credential, so destroy returns
+    # false rather than raising; surface that message instead of deleting.
+    def destroy
+      if @credential.destroy
+        redirect_to console_credentials_path, notice: "Credential deleted."
+      else
+        redirect_to console_credential_path(@credential.oid),
+                    alert: @credential.errors.full_messages.to_sentence.presence || "Could not delete credential."
       end
     end
 

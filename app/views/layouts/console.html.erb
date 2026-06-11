@@ -58,6 +58,12 @@
       </header>
 
       <main class="mx-auto max-w-7xl px-6 py-10">
+        <% if flash[:notice] %>
+          <div class="mb-6 rounded border border-ink-600 bg-ink-850/60 px-4 py-3 text-sm text-zinc-400"><%= flash[:notice] %></div>
+        <% end %>
+        <% if flash[:alert] %>
+          <div class="mb-6 rounded border border-red-500/40 bg-red-500/[0.08] px-4 py-3 text-sm text-red-300"><%= flash[:alert] %></div>
+        <% end %>
         <%= yield %>
       </main>
 
