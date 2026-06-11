@@ -38,6 +38,65 @@ class BrokerCredentialTest < ActiveSupport::TestCase
     assert bc.errors[:client_id].any?
   end
 
+  # --- oauth_app provenance (flow-minted credentials) -----------------------
+
+  def build_app(**overrides)
+    OauthApp.create!({
+      provider: "google", slug: "slug-#{SecureRandom.hex(4)}",
+      client_id: "app-cid", client_secret: "app-secret",
+      allowed_scopes: %w[a b],
+      credential_namespace: "default", created_by: users(:acme_admin)
+    }.merge(overrides))
+  end
+
+  test "client_id not required when linked to an oauth_app" do
+    app = build_app
+    bc = build_credential(client_id: nil, oauth_app: app, provider_subject: "sub-1", created_by: nil)
+    assert bc.valid?, bc.errors.full_messages.to_sentence
+  end
+
+  test "created_by is optional" do
+    app = build_app
+    bc = build_credential(client_id: nil, created_by: nil, oauth_app: app, provider_subject: "sub-2")
+    assert bc.valid?, bc.errors.full_messages.to_sentence
+  end
+
+  test "effective client credentials come from the columns when standalone" do
+    bc = build_credential(client_id: "own-id", client_secret: "own-secret")
+    assert_equal "own-id", bc.effective_client_id
+    assert_equal "own-secret", bc.effective_client_secret
+  end
+
+  test "effective client credentials delegate to the linked app" do
+    app = build_app(client_id: "app-cid", client_secret: "app-secret")
+    bc = build_credential(client_id: "own-id", client_secret: "own-secret",
+                          oauth_app: app, provider_subject: "sub-3", created_by: nil)
+    assert_equal "app-cid", bc.effective_client_id
+    assert_equal "app-secret", bc.effective_client_secret
+  end
+
+  test "refresh uses the app's client secret for an app-linked credential" do
+    captured = {}
+    app = build_app(client_id: "app-cid", client_secret: "app-secret")
+    bc = create_credential(client_id: nil, client_secret: nil, oauth_app: app,
+                           provider_subject: "sub-4", created_by: nil, refresh_token: "rt")
+    bc.refresh_client = StubClient.new { |**kw| captured = kw; result }
+    bc.refresh!
+    assert_equal "app-cid", captured[:client_id]
+    assert_equal "app-secret", captured[:client_secret]
+  end
+
+  test "external_user_key must be url-safe and bounded" do
+    app = build_app
+    bc = build_credential(oauth_app: app, provider_subject: "sub-5", created_by: nil, client_id: nil)
+    bc.external_user_key = "not safe"
+    refute bc.valid?
+    bc.external_user_key = "a" * 129
+    refute bc.valid?
+    bc.external_user_key = "safe-key_123"
+    assert bc.valid?, bc.errors.full_messages.to_sentence
+  end
+
   test "client_secret and token_endpoint_headers are encrypted at rest" do
     bc = create_credential(client_secret: "shh", token_endpoint_headers: { "X-Api-Key" => "k" })
     raw = BrokerCredential.connection.select_one(

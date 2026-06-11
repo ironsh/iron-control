@@ -34,6 +34,15 @@ Rails.application.routes.draw do
     resources :broker_credentials, only: %i[new create edit update], path: "credentials"
   end
   get "console/credentials/:id", to: "console#credential", as: :console_credential
+  get "console/oauth_apps", to: "console#oauth_apps", as: :console_oauth_apps
+  # Create/edit forms for OAuth apps. Declared before the show route so
+  # /console/oauth_apps/new wins over the generic `:id` match. Named
+  # `*_oauth_app_form*` so the form helpers don't collide with the read
+  # (list/show) routes below, which keep the clean `console_oauth_app(s)` names.
+  namespace :console do
+    resources :oauth_apps, only: %i[new create edit update], as: :oauth_app_forms
+  end
+  get "console/oauth_apps/:id", to: "console#oauth_app", as: :console_oauth_app
 
   namespace :api do
     namespace :v1 do
@@ -88,10 +97,22 @@ Rails.application.routes.draw do
         collection { get "lookup/:namespace/:foreign_id", action: :lookup, as: :lookup }
       end
 
+      # Operator-managed OAuth apps (ApiKey auth). Addressed by oid or slug; CRUD
+      # + lookup-by-slug. client_secret is write-only and never serialized back.
+      resources :oauth_apps, only: %i[index show create update destroy] do
+        collection { get "lookup/:slug", action: :lookup, as: :lookup }
+      end
+
       # Called by iron-proxy instances (proxy bearer auth, not ApiKey auth).
       post "proxy/sync", to: "proxy_sync#create"
     end
   end
+
+  # Public OAuth consent flow, keyed by the app's well-known slug
+  # (/oauth/google/start). Deliberately unauthenticated: a team member clicks the
+  # link to connect an integration; the provider is derived from the app.
+  get "oauth/:slug/start", to: "oauth/flows#start", as: :oauth_start
+  get "oauth/:slug/callback", to: "oauth/flows#callback", as: :oauth_callback
 
   # Render a JSON 404 for any unmatched route instead of the static error page.
   match "*path", to: "errors#not_found", via: :all

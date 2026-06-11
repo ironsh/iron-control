@@ -95,6 +95,43 @@ class ConsoleControllerTest < ActionDispatch::IntegrationTest
     assert_response :not_found
   end
 
+  test "oauth apps table lists apps and links to detail" do
+    app = oauth_apps(:acme_google)
+    get console_oauth_apps_url
+    assert_response :ok
+    assert_select "a[href=?]", console_oauth_app_path(app.oid)
+    assert_select "span", text: app.provider
+  end
+
+  test "oauth app detail page shows config, the redirect URI, and a start URL" do
+    app = oauth_apps(:acme_google)
+    app.update!(client_secret: "shh")
+    get console_oauth_app_url(app.oid)
+    assert_response :ok
+    assert_select "h1", text: app.slug
+    assert_select "dd", text: app.client_id
+    assert_select "dd", text: "set" # client secret presence, never the value
+    assert_includes response.body, "/oauth/google/callback"
+    assert_includes response.body, "/oauth/google/start"
+  end
+
+  test "oauth app detail page 404s for an unknown id" do
+    get console_oauth_app_url("oap_missing")
+    assert_response :not_found
+  end
+
+  test "credential detail page shows the provider identity for a flow-minted credential" do
+    app = oauth_apps(:acme_google)
+    cred = BrokerCredential.create!(namespace: "acme", foreign_id: "minted-1",
+                                    token_endpoint: "https://oauth2.googleapis.com/token",
+                                    oauth_app: app, provider_subject: "sub-9",
+                                    provider_email: "person@example.com", external_user_key: "user-9")
+    get console_credential_url(cred.oid)
+    assert_response :ok
+    assert_select "dd", text: "person@example.com"
+    assert_select "a[href=?]", console_oauth_app_path(app.oid)
+  end
+
   test "header shows the signed-in operator and a sign-out control" do
     get console_principals_url
     assert_response :ok

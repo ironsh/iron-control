@@ -32,7 +32,12 @@ class BrokerCredential < ApplicationRecord
   BACKOFF_BASE_SECONDS = 5
   BACKOFF_MAX_SECONDS = 5 * 60
 
-  belongs_to :created_by, class_name: "User"
+  # Optional: a flow-minted credential has no console operator behind it (the
+  # public consent flow runs unauthenticated).
+  belongs_to :created_by, class_name: "User", optional: true
+  # Set on credentials minted by the OAuth consent flow; they delegate their
+  # client_id/client_secret to the app (see #effective_client_secret).
+  belongs_to :oauth_app, optional: true
 
   attr_writer :refresh_client
 
@@ -55,7 +60,11 @@ class BrokerCredential < ApplicationRecord
   validates :foreign_id, uniqueness: { scope: :namespace, allow_nil: true },
             format: { with: URL_SAFE_FORMAT, message: URL_SAFE_MESSAGE }, allow_nil: true
   validates :token_endpoint, presence: true
-  validates :client_id, presence: true
+  # client_id is sourced from the linked OauthApp for flow-minted credentials, so
+  # it is only required on standalone (operator-authored) credentials.
+  validates :client_id, presence: true, unless: :oauth_app_id?
+  validates :external_user_key, format: { with: URL_SAFE_FORMAT, message: URL_SAFE_MESSAGE },
+            length: { maximum: 128 }, allow_nil: true
   validates :early_refresh_fraction,
             numericality: { greater_than_or_equal_to: 0, less_than: 1 }
   validates :early_refresh_slack_seconds, :max_refresh_interval_seconds, :refresh_timeout_seconds,
@@ -63,6 +72,12 @@ class BrokerCredential < ApplicationRecord
   validate :labels_is_a_hash
   validate :scopes_is_an_array
   validate :token_endpoint_headers_valid
+
+  # OAuth client identity used for refresh. Flow-minted credentials delegate to
+  # their OauthApp so a client-secret rotation on the app applies to every
+  # credential it minted; standalone credentials use their own columns.
+  def effective_client_id     = oauth_app&.client_id || client_id
+  def effective_client_secret = oauth_app ? oauth_app.client_secret : client_secret
 
   # bootstrapping: seeded but never refreshed; dead: needs human re-auth;
   # live: has minted at least one access token.
@@ -127,8 +142,8 @@ class BrokerCredential < ApplicationRecord
   def perform_refresh(now:)
     refresh_client.refresh(
       token_endpoint: token_endpoint,
-      client_id: client_id,
-      client_secret: client_secret,
+      client_id: effective_client_id,
+      client_secret: effective_client_secret,
       refresh_token: refresh_token,
       scopes: scopes,
       headers: token_endpoint_headers || {},

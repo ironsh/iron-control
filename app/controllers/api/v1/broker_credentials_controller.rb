@@ -118,14 +118,14 @@ module Api
           dead: ref.dead,
           dead_reason: ref.dead_reason,
           failure_count: ref.failure_count,
+          # Provenance for flow-minted credentials (nil for standalone ones).
+          oauth_app_id: ref.oauth_app&.oid,
+          provider_subject: ref.provider_subject,
+          provider_email: ref.provider_email,
+          external_user_key: ref.external_user_key,
           created_at: ref.created_at,
           updated_at: ref.updated_at
         }
-      end
-
-      def render_validation_error(record)
-        render status: :unprocessable_entity,
-               json: { error: { message: "validation failed", details: record.errors.as_json } }
       end
     end
   end

@@ -37,6 +37,21 @@ module Api
         refute data.key?("refresh_token")
       end
 
+      test "serializes oauth_app provenance for flow-minted credentials" do
+        app = oauth_apps(:acme_google)
+        cred = BrokerCredential.create!(namespace: "acme", foreign_id: "minted-serialize",
+                                        token_endpoint: "https://oauth2.googleapis.com/token",
+                                        oauth_app: app, provider_subject: "sub-ser",
+                                        provider_email: "p@example.com", external_user_key: "user-ser")
+        get api_v1_broker_credential_url(id: cred.oid), headers: auth_headers
+        assert_response :ok
+        data = json_body.fetch("data")
+        assert_equal app.oid, data["oauth_app_id"]
+        assert_equal "sub-ser", data["provider_subject"]
+        assert_equal "p@example.com", data["provider_email"]
+        assert_equal "user-ser", data["external_user_key"]
+      end
+
       test "create seeds the refresh_token, schedules it due now, and redacts secrets" do
         body = {
           data: {

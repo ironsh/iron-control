@@ -31,8 +31,6 @@ class ConsoleController < ApplicationController
       "pg_dsn" => @principal.granted_pg_dsn_secrets,
       "hmac" => @principal.granted_hmac_secrets
     }
-  rescue ActiveRecord::RecordNotFound
-    render plain: "principal not found", status: :not_found
   end
 
   def secrets
@@ -47,21 +45,31 @@ class ConsoleController < ApplicationController
 
     @kind = params[:kind]
     @secret = cfg[:model].includes(cfg[:includes]).find_by_oid!(params[:id])
-  rescue ActiveRecord::RecordNotFound
-    render plain: "secret not found", status: :not_found
   end
 
   # Managed broker credentials and their refresh-loop status. Distinct from
   # SECRET_KINDS because a broker credential is not grantable -- it is referenced
   # by a token_broker source rather than granted directly.
   def credentials
-    @credentials = BrokerCredential.order(created_at: :asc, id: :asc)
+    @credentials = BrokerCredential.includes(:oauth_app).order(created_at: :asc, id: :asc)
   end
 
   def credential
     @credential = BrokerCredential.find_by_oid!(params[:id])
-  rescue ActiveRecord::RecordNotFound
-    render plain: "credential not found", status: :not_found
+  end
+
+  # Registered OAuth apps and the consent flows they drive. Like credentials,
+  # an app is not grantable -- it is the durable config behind the public
+  # /oauth/:provider/start flow.
+  def oauth_apps
+    @oauth_apps = OauthApp.order(created_at: :asc, id: :asc)
+    # One count query for the whole table rather than one per row.
+    @minted_counts = BrokerCredential.group(:oauth_app_id).count
+  end
+
+  def oauth_app
+    @oauth_app = OauthApp.find_by_oid!(params[:id])
+    @minted_credentials = @oauth_app.broker_credentials.order(created_at: :asc, id: :asc)
   end
 
   # Where a secret's value is resolved from, as a list of segments. Each segment

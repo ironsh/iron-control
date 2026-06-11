@@ -6,6 +6,8 @@ module Console
   # not a secret (it is referenced by a token_broker source, not granted), so it
   # lives on its own rather than under BaseSecretsController.
   class BrokerCredentialsController < ApplicationController
+    include KvRowParams
+
     layout "console"
 
     before_action :set_credential, only: %i[edit update]
@@ -77,28 +79,15 @@ module Console
       credential_params[:scopes].to_s.split.map(&:strip).reject(&:blank?)
     end
 
-    # Token-endpoint headers and labels share the same key/value row editor: an
-    # ordered map of rows, each { key:, value: }, keyed by name. Headers collapse to
-    # nil when none are given (the column's default), where labels stay an empty hash.
+    # Token-endpoint headers use the same key/value row editor as labels
+    # (KvRowParams), but collapse to nil when none are given (the column's
+    # default), where labels stay an empty hash.
     def header_params
       kv_rows(params[:headers]).presence
     end
 
-    def label_params
-      kv_rows(params[:labels])
-    end
-
-    def kv_rows(raw)
-      (raw&.to_unsafe_h || {}).values.each_with_object({}) do |row, acc|
-        key = row["key"].to_s.strip
-        acc[key] = row["value"].to_s if key.present?
-      end
-    end
-
     def set_credential
       @credential = BrokerCredential.find_by_oid!(params[:id])
-    rescue ActiveRecord::RecordNotFound
-      render plain: "credential not found", status: :not_found
     end
   end
 end

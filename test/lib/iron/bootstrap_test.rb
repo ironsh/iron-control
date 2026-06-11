@@ -13,6 +13,7 @@ class Iron::BootstrapTest < ActiveSupport::TestCase
     RequestRule.delete_all
     SecretSource.delete_all
     BrokerCredential.delete_all
+    OauthApp.delete_all
     StaticSecret.delete_all
     GcpAuthSecret.delete_all
     AwsAuthSecret.delete_all
