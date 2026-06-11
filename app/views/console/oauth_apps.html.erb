@@ -48,7 +48,7 @@
                 <span class="rounded px-2 py-0.5 text-xs ring-1 bg-zinc-500/10 text-zinc-400 ring-zinc-500/25">disabled</span>
               <% end %>
             </td>
-            <td class="px-5 py-3 whitespace-nowrap text-zinc-400"><%= a.broker_credentials.count %></td>
+            <td class="px-5 py-3 whitespace-nowrap text-zinc-400"><%= @minted_counts.fetch(a.id, 0) %></td>
           </tr>
         <% end %>
       </tbody>

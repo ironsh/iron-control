@@ -5,6 +5,8 @@ module Console
   # Console::BrokerCredentialsController -- an OAuth app is operator config, not a
   # secret, so it lives on its own rather than under BaseSecretsController.
   class OauthAppsController < ApplicationController
+    include KvRowParams
+
     layout "console"
 
     before_action :set_app, only: %i[edit update]
@@ -41,7 +43,6 @@ module Console
     # value in place (same pattern as BrokerCredentialsController).
     def assign_form(app)
       fields = app_params.permit(:slug, :description, :provider, :client_id, :credential_namespace)
-      fields[:credential_namespace] = fields[:credential_namespace].presence || "default"
       app.assign_attributes(fields)
       app.enabled = app_params[:enabled] == "1"
       app.allowed_scopes = line_list(app_params[:allowed_scopes])
@@ -61,17 +62,8 @@ module Console
       raw.to_s.split(/\r?\n/).map(&:strip).reject(&:blank?)
     end
 
-    def label_params
-      (params[:labels]&.to_unsafe_h || {}).values.each_with_object({}) do |row, acc|
-        key = row["key"].to_s.strip
-        acc[key] = row["value"].to_s if key.present?
-      end
-    end
-
     def set_app
       @app = OauthApp.find_by_oid!(params[:id])
-    rescue ActiveRecord::RecordNotFound
-      render plain: "oauth app not found", status: :not_found
     end
   end
 end

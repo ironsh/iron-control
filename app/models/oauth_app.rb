@@ -65,8 +65,12 @@ class OauthApp < ApplicationRecord
   end
 
   def allowed_scopes_valid
-    unless allowed_scopes.is_a?(Array) && allowed_scopes.any? && allowed_scopes.all? { |s| s.is_a?(String) && s.present? }
-      errors.add(:allowed_scopes, "must be a non-empty array of non-blank strings")
-    end
+    return if allowed_scopes_list_valid?
+    errors.add(:allowed_scopes, "must be a non-empty array of non-blank strings")
+  end
+
+  def allowed_scopes_list_valid?
+    allowed_scopes.is_a?(Array) && allowed_scopes.any? &&
+      allowed_scopes.all? { |s| s.is_a?(String) && s.present? }
   end
 end

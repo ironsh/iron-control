@@ -6,6 +6,7 @@ module Console
   # source association, and (where applicable) rules.
   class BaseSecretsController < ApplicationController
     include SecretKinds
+    include KvRowParams
 
     layout "console"
 
@@ -63,13 +64,6 @@ module Console
       secret.labels = label_params
     end
 
-    def label_params
-      (params[:labels]&.to_unsafe_h || {}).values.each_with_object({}) do |row, acc|
-        key = row["key"].to_s.strip
-        acc[key] = row["value"].to_s if key.present?
-      end
-    end
-
     # The SecretSource described by the `source` params, or nil when no backend was
     # chosen. The subclass assigns it to its has_one association (source/dsn_source).
     def build_source
@@ -97,8 +91,6 @@ module Console
 
     def set_secret
       @secret = model.find_by_oid!(params[:id])
-    rescue ActiveRecord::RecordNotFound
-      render plain: "secret not found", status: :not_found
     end
   end
 end

@@ -42,6 +42,11 @@ module Api
       render_error(status: :bad_request, message: e.message)
     end
 
+    def render_validation_error(record)
+      render_error(status: :unprocessable_entity, message: "validation failed",
+                   details: record.errors.as_json)
+    end
+
     def data_params
       params.require(:data)
     end

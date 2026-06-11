@@ -119,11 +119,6 @@ module Api
       def source_payload(source)
         { source_type: source.source_type, config: source.config }
       end
-
-      def render_validation_error(record)
-        render status: :unprocessable_entity,
-               json: { error: { message: "validation failed", details: record.errors.as_json } }
-      end
     end
   end
 end

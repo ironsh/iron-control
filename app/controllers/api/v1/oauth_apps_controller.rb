@@ -111,11 +111,6 @@ module Api
           updated_at: app.updated_at
         }
       end
-
-      def render_validation_error(record)
-        render status: :unprocessable_entity,
-               json: { error: { message: "validation failed", details: record.errors.as_json } }
-      end
     end
   end
 end
