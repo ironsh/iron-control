@@ -37,50 +37,32 @@ class Principal < ApplicationRecord
 
   # Static secrets this principal resolves to, via its effective grants.
   def granted_static_secrets
-    StaticSecret
-      .where(id: effective_grants.select(:static_secret_id))
-      .includes(:source, :rules)
-      .order(:id)
+    granted_secrets_by_priority(StaticSecret, :static_secret_id, includes: %i[source rules])
   end
 
   # gcp_auth credentials this principal resolves to, via its effective grants.
   def granted_gcp_auth_secrets
-    GcpAuthSecret
-      .where(id: effective_grants.select(:gcp_auth_secret_id))
-      .includes(:keyfile_source, :rules)
-      .order(:id)
+    granted_secrets_by_priority(GcpAuthSecret, :gcp_auth_secret_id, includes: %i[keyfile_source rules])
   end
 
   # aws_auth credentials this principal resolves to, via its effective grants.
   def granted_aws_auth_secrets
-    AwsAuthSecret
-      .where(id: effective_grants.select(:aws_auth_secret_id))
-      .includes(:sources, :rules)
-      .order(:id)
+    granted_secrets_by_priority(AwsAuthSecret, :aws_auth_secret_id, includes: %i[sources rules])
   end
 
   # oauth_token credentials this principal resolves to, via its effective grants.
   def granted_oauth_token_secrets
-    OauthTokenSecret
-      .where(id: effective_grants.select(:oauth_token_secret_id))
-      .includes(:sources, :rules)
-      .order(:id)
+    granted_secrets_by_priority(OauthTokenSecret, :oauth_token_secret_id, includes: %i[sources rules])
   end
 
   # hmac_sign credentials this principal resolves to, via its effective grants.
   def granted_hmac_secrets
-    HmacSecret
-      .where(id: effective_grants.select(:hmac_secret_id))
-      .includes(:sources, :rules)
-      .order(:id)
+    granted_secrets_by_priority(HmacSecret, :hmac_secret_id, includes: %i[sources rules])
   end
 
   # Postgres upstreams this principal resolves to, via its effective grants.
   def granted_pg_dsn_secrets
-    PgDsnSecret
-      .where(id: effective_grants.select(:pg_dsn_secret_id))
-      .includes(:dsn_source)
-      .order(:id)
+    granted_secrets_by_priority(PgDsnSecret, :pg_dsn_secret_id, includes: %i[dsn_source])
   end
 
   # The `secrets` array delivered to iron-proxy. Each entry maps to the proxy's
@@ -134,6 +116,34 @@ class Principal < ApplicationRecord
     }
     redact_secrets ? self.class.redact_live_secrets(config) : config
   end
+
+  private
+
+  # The single place secret order is decided for every sync array. iron-proxy
+  # applies matching transforms in array order and the LAST one wins, so we emit
+  # in ASCENDING priority: the highest-priority grant lands last and becomes
+  # authoritative. A secret reachable by several grants (e.g. both directly and
+  # via a role) collapses to one row taking the strongest priority among them
+  # (MAX), and the id tiebreak keeps the order deterministic for config_hash.
+  #
+  # Do NOT add an `.order(:id)`-style sort to the per-type callers above or emit
+  # grants in any other order downstream: that would silently let the wrong
+  # credential win. `foreign_key` and the model table name are internal symbols,
+  # never user input.
+  def granted_secrets_by_priority(model, foreign_key, includes:)
+    priorities = effective_grants
+      .where.not(foreign_key => nil)
+      .group(foreign_key)
+      .select("#{foreign_key} AS secret_id, MAX(priority) AS effective_priority")
+
+    model
+      .joins("INNER JOIN (#{priorities.to_sql}) granted_priorities " \
+             "ON granted_priorities.secret_id = #{model.table_name}.id")
+      .includes(*includes)
+      .order(Arel.sql("granted_priorities.effective_priority ASC, #{model.table_name}.id ASC"))
+  end
+
+  public
 
   # Deep-walk a config payload and blank out the inline value of every
   # control_plane source, leaving the rest of the structure intact.

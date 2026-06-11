@@ -95,4 +95,26 @@ class GrantTest < ActiveSupport::TestCase
     grant = grants(:acme_channel_github_token)
     assert_equal grant, Grant.find_by_oid(grant.oid)
   end
+
+  test "a direct grant defaults to the higher direct priority" do
+    grant = Grant.create!(valid_attrs(principal: principals(:globex_user)))
+    assert_equal Grant::DEFAULT_DIRECT_PRIORITY, grant.priority
+  end
+
+  test "a role grant defaults to the lower role priority" do
+    grant = Grant.create!(valid_attrs(principal: nil, role: roles(:globex_infra)))
+    assert_equal Grant::DEFAULT_ROLE_PRIORITY, grant.priority
+    assert_operator Grant::DEFAULT_DIRECT_PRIORITY, :>, Grant::DEFAULT_ROLE_PRIORITY
+  end
+
+  test "an explicit priority overrides the grantee default" do
+    grant = Grant.create!(valid_attrs(principal: principals(:globex_user), priority: 5))
+    assert_equal 5, grant.priority
+  end
+
+  test "priority is mutable after creation" do
+    grant = grants(:acme_infra_prod_api_key)
+    grant.update!(priority: 250)
+    assert_equal 250, grant.reload.priority
+  end
 end

@@ -203,6 +203,41 @@ class PrincipalTest < ActiveSupport::TestCase
     assert_equal 1, ids.count(static_secrets(:acme_prod_api_key).id)
   end
 
+  test "directly granted secrets are emitted after role-granted secrets" do
+    # acme_channel holds two direct grants (priority 100) and resolves
+    # acme_prod_api_key through the acme_infra role (priority 0). The role secret
+    # is emitted first so the higher-priority direct secrets win iron-proxy's
+    # last-transform-wins.
+    ids = principals(:acme_channel).granted_static_secrets.map(&:id)
+    role_secret = static_secrets(:acme_prod_api_key)
+    direct_secrets = [ static_secrets(:github_token_inject), static_secrets(:db_password_replace) ]
+
+    assert_equal role_secret.id, ids.first
+    direct_secrets.each do |s|
+      assert_operator ids.index(s.id), :>, ids.index(role_secret.id)
+    end
+  end
+
+  test "an explicitly higher-priority role grant outranks direct grants" do
+    grants(:acme_infra_prod_api_key).update!(priority: 500)
+    ids = principals(:acme_channel).granted_static_secrets.map(&:id)
+    # Promoted above the direct grants (priority 100), it now sorts last and wins.
+    assert_equal static_secrets(:acme_prod_api_key).id, ids.last
+  end
+
+  test "a secret reachable via several grants takes the strongest priority" do
+    principal = principals(:acme_channel)
+    # Already reaches acme_prod_api_key via the role at priority 0; add a direct
+    # grant at a higher priority. The secret collapses to one row taking the MAX
+    # priority, so it sorts last rather than first.
+    Grant.create!(principal: principal, static_secret: static_secrets(:acme_prod_api_key),
+                  created_by: users(:acme_admin), priority: 900)
+    ids = principal.granted_static_secrets.map(&:id)
+
+    assert_equal ids.uniq, ids
+    assert_equal static_secrets(:acme_prod_api_key).id, ids.last
+  end
+
   test "effective_config redacts inline control_plane values by default but not when asked for live secrets" do
     principal = principals(:acme_channel)
     SecretSource.create!(source_type: "control_plane", secret: "s3cr3t",
