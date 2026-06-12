@@ -15,15 +15,6 @@ Rails.application.configure do
   # Enable server timing.
   config.server_timing = true
 
-  # Log to STDOUT as single-line JSON with the current request id as a default log tag,
-  # matching production.
-  config.log_tags = [ :request_id ]
-  config.logger = ActiveSupport::TaggedLogging.logger(STDOUT)
-  config.logger.formatter = JsonLogFormatter.new
-
-  # Skip ANSI color codes; they are noise inside JSON log entries.
-  config.colorize_logging = false
-
   # Enable/disable Action Controller caching. By default Action Controller caching is disabled.
   # Run rails dev:cache to toggle Action Controller caching.
   if Rails.root.join("tmp/caching-dev.txt").exist?
