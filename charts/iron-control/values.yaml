@@ -1,0 +1,152 @@
+image:
+  # Required. e.g. ghcr.io/ironsh/iron-control
+  repository: ""
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  # Defaults to the release fullname when create is true, otherwise "default".
+  name: ""
+
+database:
+  # Required. Hostname of the external Postgres server. The app expects four
+  # databases on it (iron_control_production, _cache, _queue, _cable) owned by
+  # the "iron_control" role; the password comes from the secret below.
+  host: ""
+  port: 5432
+
+secrets:
+  # Name of a pre-created Secret containing the keys below. Recommended for
+  # production (plays well with external-secrets). When set, the chart does
+  # not create its own Secret and secrets.values is ignored.
+  #
+  # Required keys: RAILS_MASTER_KEY, IRON_CONTROL_DATABASE_PASSWORD,
+  # IRON_CONTROL_AR_ENCRYPTION_PRIMARY_KEY,
+  # IRON_CONTROL_AR_ENCRYPTION_DETERMINISTIC_KEY,
+  # IRON_CONTROL_AR_ENCRYPTION_KEY_DERIVATION_SALT
+  existingSecret: ""
+  # Used only when existingSecret is empty; the chart renders these into a
+  # Secret of its own. All five are required in that case.
+  values:
+    railsMasterKey: ""
+    databasePassword: ""
+    arEncryptionPrimaryKey: ""
+    arEncryptionDeterministicKey: ""
+    arEncryptionKeyDerivationSalt: ""
+
+# Optional first-boot bootstrap. Only applied when the chart manages the
+# Secret (secrets.existingSecret unset); with an existing Secret, add the
+# IRON_CONTROL_INITIAL_* keys there instead.
+bootstrap:
+  initialUserEmail: ""
+  initialUserPassword: ""
+  initialApiKey: ""
+
+config:
+  # RAILS_LOG_LEVEL
+  logLevel: info
+  # WEB_CONCURRENCY: Puma worker processes (web pods only).
+  webConcurrency: 1
+  # RAILS_MAX_THREADS: Puma threads and ActiveRecord pool size.
+  railsMaxThreads: 3
+  # IRON_CONTROL_JOB_CONCURRENCY: Solid Queue worker processes (jobs pods only).
+  jobConcurrency: 1
+
+# Extra env entries / envFrom sources appended to all workloads (web, jobs,
+# migrations). Do NOT set IRON_CONTROL_SOLID_QUEUE_IN_PUMA here; this chart
+# runs jobs in a dedicated Deployment.
+extraEnv: []
+extraEnvFrom: []
+
+web:
+  replicas: 2
+  # Port Thruster listens on (HTTP_PORT). Kept above 1024 because the image
+  # runs as a non-root user.
+  containerPort: 8080
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  startupProbe:
+    enabled: true
+    failureThreshold: 30
+    periodSeconds: 2
+  readinessProbe:
+    enabled: true
+    periodSeconds: 10
+  livenessProbe:
+    enabled: true
+    periodSeconds: 15
+  # Extra env entries for web pods only.
+  extraEnv: []
+
+jobs:
+  # Solid Queue handles its own locking, so >1 is safe but rarely needed.
+  # Recurring jobs (config/recurring.yml) are scheduled by the supervisor.
+  replicas: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # Extra env entries for jobs pods only.
+  extraEnv: []
+
+migrations:
+  # Run `rails db:prepare` as a Helm pre-install/pre-upgrade hook Job.
+  enabled: true
+  backoffLimit: 1
+  activeDeadlineSeconds: 600
+  resources: {}
+  podAnnotations: {}
+
+service:
+  type: ClusterIP
+  port: 80
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: iron-control.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
