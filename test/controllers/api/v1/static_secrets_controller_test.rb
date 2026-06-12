@@ -253,6 +253,49 @@ module Api
         assert_nil RequestRule.find_by(id: old_rule.id), "old rule should be deleted"
       end
 
+      test "PUT switches a secret from replace_config to inject_config" do
+        ref = static_secrets(:db_password_replace)
+
+        body = {
+          data: {
+            namespace: ref.namespace,
+            name: ref.name,
+            inject_config: { "header" => "Authorization", "formatter" => "Bearer {{ .Value }}" },
+            replace_config: nil,
+            source: { source_type: "env", config: { "var" => "DB_PASSWORD" } },
+            rules: [ { host: "db.example.com" } ]
+          }
+        }
+
+        put api_v1_static_secret_url(id: ref.oid), params: body.to_json, headers: auth_headers
+        assert_response :ok
+
+        ref.reload
+        assert_equal({ "header" => "Authorization", "formatter" => "Bearer {{ .Value }}" },
+                     ref.inject_config)
+        assert_nil ref.replace_config
+      end
+
+      test "PUT clears fields omitted from the body" do
+        ref = static_secrets(:db_password_replace)
+
+        body = {
+          data: {
+            namespace: ref.namespace,
+            name: ref.name,
+            inject_config: { "header" => "Authorization" }
+          }
+        }
+
+        put api_v1_static_secret_url(id: ref.oid), params: body.to_json, headers: auth_headers
+        assert_response :ok
+
+        ref.reload
+        assert_nil ref.replace_config
+        assert_nil ref.description
+        assert_equal({}, ref.labels)
+      end
+
       test "PUT rolls back changes when validation fails" do
         ref = static_secrets(:github_token_inject)
         SecretSource.create!(source_type: "env", config: { "var" => "ORIGINAL" }, static_secret: ref)

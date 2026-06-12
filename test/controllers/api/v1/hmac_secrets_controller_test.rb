@@ -125,6 +125,19 @@ module Api
         assert_equal %w[key_id secret].sort, secret.sources.map(&:role).sort
       end
 
+      test "PUT clears fields omitted from the body" do
+        secret = hmac_secrets(:acme_webhook_hmac)
+        body = valid_body
+        body[:data].delete(:foreign_id)
+
+        put api_v1_hmac_secret_url(id: secret.oid), params: body.to_json, headers: auth_headers
+        assert_response :ok
+
+        secret.reload
+        assert_equal({}, secret.labels)
+        assert_nil secret.name
+      end
+
       test "GET index is scoped by namespace" do
         get api_v1_hmac_secrets_url, params: { namespace: "acme" }, headers: auth_headers
         assert_response :ok

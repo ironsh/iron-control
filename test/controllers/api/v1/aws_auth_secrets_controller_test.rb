@@ -113,6 +113,20 @@ module Api
         assert_equal "NEW_AK", secret.sources.find { |s| s.role == "access_key_id" }.config["var"]
       end
 
+      test "PUT clears fields omitted from the body" do
+        secret = aws_auth_secrets(:acme_cloudwatch_aws)
+        body = valid_body
+        body[:data].delete(:foreign_id)
+        body[:data].delete(:allowed_services)
+
+        put api_v1_aws_auth_secret_url(id: secret.oid), params: body.to_json, headers: auth_headers
+        assert_response :ok
+
+        secret.reload
+        assert_equal({}, secret.labels)
+        assert_equal [], secret.allowed_services
+      end
+
       test "DELETE removes an aws_auth secret" do
         secret = aws_auth_secrets(:acme_cloudwatch_aws)
         assert_difference -> { AwsAuthSecret.count } => -1 do

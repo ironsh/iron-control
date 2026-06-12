@@ -147,6 +147,29 @@ module Api
         assert_equal 1, secret.rules.count
       end
 
+      test "PUT clears a stale audience when omitted from the body" do
+        secret = oauth_token_secrets(:acme_gmail_oauth)
+        secret.update!(audience: "https://old.example.com")
+        body = {
+          data: {
+            grant: "client_credentials",
+            token_endpoint: "https://oauth2.googleapis.com/token",
+            credentials: {
+              client_id: { source_type: "env", config: { var: "CID" } },
+              client_secret: { source_type: "env", config: { var: "SECRET" } }
+            },
+            rules: [ { host: "www.googleapis.com" } ]
+          }
+        }
+
+        put api_v1_oauth_token_secret_url(id: secret.oid), params: body.to_json, headers: auth_headers
+        assert_response :ok
+
+        secret.reload
+        assert_nil secret.audience
+        assert_equal({}, secret.labels)
+      end
+
       test "PUT upserts a new oauth secret by foreign_id" do
         body = {
           data: {
