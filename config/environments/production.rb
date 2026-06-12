@@ -41,6 +41,9 @@ Rails.application.configure do
   # Change to "debug" to log everything (including potentially personally-identifiable information!).
   config.log_level = ENV.fetch("RAILS_LOG_LEVEL", "info")
 
+  # Skip ANSI color codes; they are noise inside JSON log entries.
+  config.colorize_logging = false
+
   # Collapse the default multi-line request logs into a single JSON event per
   # request. The Raw formatter emits a hash that JsonLogFormatter merges into
   # the JSON log entry.
