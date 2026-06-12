@@ -21,15 +21,6 @@ Rails.application.configure do
   config.logger = ActiveSupport::TaggedLogging.logger(STDOUT)
   config.logger.formatter = JsonLogFormatter.new
 
-  # Collapse the default multi-line request logs into a single JSON event per
-  # request. The Raw formatter emits a hash that JsonLogFormatter merges into
-  # the JSON log entry.
-  config.lograge.enabled = true
-  config.lograge.formatter = Lograge::Formatters::Raw.new
-  config.lograge.custom_payload do |controller|
-    { request_id: controller.request.request_id }
-  end
-
   # Skip ANSI color codes; they are noise inside JSON log entries.
   config.colorize_logging = false
 
