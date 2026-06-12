@@ -33,12 +33,25 @@ Rails.application.configure do
   # Skip http-to-https redirect for the default health check endpoint.
   # config.ssl_options = { redirect: { exclude: ->(request) { request.path == "/up" } } }
 
-  # Log to STDOUT with the current request id as a default log tag.
+  # Log to STDOUT as single-line JSON with the current request id as a default log tag.
   config.log_tags = [ :request_id ]
   config.logger   = ActiveSupport::TaggedLogging.logger(STDOUT)
+  config.logger.formatter = JsonLogFormatter.new
 
   # Change to "debug" to log everything (including potentially personally-identifiable information!).
   config.log_level = ENV.fetch("RAILS_LOG_LEVEL", "info")
+
+  # Skip ANSI color codes; they are noise inside JSON log entries.
+  config.colorize_logging = false
+
+  # Collapse the default multi-line request logs into a single JSON event per
+  # request. The Raw formatter emits a hash that JsonLogFormatter merges into
+  # the JSON log entry.
+  config.lograge.enabled = true
+  config.lograge.formatter = Lograge::Formatters::Raw.new
+  config.lograge.custom_payload do |controller|
+    { request_id: controller.request.request_id }
+  end
 
   # Prevent health checks from clogging up the logs.
   config.silence_healthcheck_path = "/up"
