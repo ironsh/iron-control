@@ -50,13 +50,8 @@ module Api
       # Builds the whole credential graph in memory and saves once so the
       # cross-record validations (exactly_one_credential) see the keyfile source.
       def assign_and_save!(ref, attrs)
-        base = attrs.permit(:namespace, :foreign_id, :name, :description, :subject,
-                            labels: {}, credentials_provider: {}, scopes: [])
-        # A PUT upsert by foreign_id sets identity on the record before
-        # assignment; a blank body value must not wipe it.
-        base.delete(:foreign_id) if base[:foreign_id].blank? && ref.foreign_id.present?
-        base.delete(:namespace) if base[:namespace].blank? && ref.namespace.present?
-        base[:namespace] = "default" if base[:namespace].blank? && ref.namespace.blank?
+        base = permit_document(ref, attrs, :name, :description, :subject,
+                               labels: {}, credentials_provider: {}, scopes: [])
 
         keyfile_attrs = if attrs.key?(:keyfile) && attrs[:keyfile].present?
           attrs.require(:keyfile).permit(:source_type, :secret, config: {})

@@ -47,20 +47,13 @@ module Api
       private
 
       def assign_and_save!(ref, attrs)
-        base = attrs.permit(
-          :namespace, :foreign_id, :name, :description, :database, :role,
+        base = permit_document(
+          ref, attrs, :name, :description, :database, :role,
           labels: {}, settings: [ :name, :value ]
         )
-        # settings is a full replace when the key is present; a normalized array
-        # of { "name", "value" } hashes is what the model stores and serializes.
-        if attrs.key?(:settings)
-          base[:settings] = Array(base[:settings]).map { |s| s.to_h.slice("name", "value") }
-        end
-        # A PUT upsert by foreign_id sets identity on the record before
-        # assignment; a blank body value must not wipe it.
-        base.delete(:foreign_id) if base[:foreign_id].blank? && ref.foreign_id.present?
-        base.delete(:namespace) if base[:namespace].blank? && ref.namespace.present?
-        base[:namespace] = "default" if base[:namespace].blank? && ref.namespace.blank?
+        # settings is normalized to the array of { "name", "value" } hashes the
+        # model stores and serializes.
+        base[:settings] = Array(base[:settings]).map { |s| s.to_h.slice("name", "value") }
 
         source_attrs = if attrs.key?(:dsn) && attrs[:dsn].present?
           attrs.require(:dsn).permit(:source_type, :secret, config: {})

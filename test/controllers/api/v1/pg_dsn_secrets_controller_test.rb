@@ -142,6 +142,7 @@ module Api
         secret = pg_dsn_secrets(:acme_analytics_pg)
         body = {
           data: {
+            database: secret.database,
             role: "writer",
             dsn: { source_type: "env", config: { var: "ROTATED_DSN" } }
           }
@@ -205,6 +206,7 @@ module Api
         secret.update!(settings: [ { "name" => "app.old", "value" => "1" } ])
         body = {
           data: {
+            database: secret.database,
             settings: [ { name: "app.new", value: "2" } ],
             dsn: { source_type: "env", config: { var: "PG_ANALYTICS_DSN" } }
           }
@@ -215,6 +217,24 @@ module Api
 
         secret.reload
         assert_equal [ { "name" => "app.new", "value" => "2" } ], secret.settings
+      end
+
+      test "PUT resets settings and role when omitted from the body" do
+        secret = pg_dsn_secrets(:acme_analytics_pg)
+        secret.update!(settings: [ { "name" => "app.old", "value" => "1" } ])
+        body = {
+          data: {
+            database: secret.database,
+            dsn: { source_type: "env", config: { var: "PG_ANALYTICS_DSN" } }
+          }
+        }
+
+        put api_v1_pg_dsn_secret_url(id: secret.oid), params: body.to_json, headers: auth_headers
+        assert_response :ok
+
+        secret.reload
+        assert_equal [], secret.settings
+        assert_nil secret.role
       end
 
       test "PUT upserts a new pg_dsn secret by foreign_id" do

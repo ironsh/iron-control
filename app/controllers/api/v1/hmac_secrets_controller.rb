@@ -50,15 +50,10 @@ module Api
       # Builds the whole credential graph in memory and saves once so the
       # credential and rule validations see every source at validation time.
       def assign_and_save!(ref, attrs)
-        base = attrs.permit(:namespace, :foreign_id, :name, :description,
-                            :timestamp_format, :signature_algorithm, :signature_key_encoding,
-                            :signature_output_encoding, :signature_message, :allow_chunked_body,
-                            labels: {}, headers: [ :name, :value ])
-        # A PUT upsert by foreign_id sets identity on the record before
-        # assignment; a blank body value must not wipe it.
-        base.delete(:foreign_id) if base[:foreign_id].blank? && ref.foreign_id.present?
-        base.delete(:namespace) if base[:namespace].blank? && ref.namespace.present?
-        base[:namespace] = "default" if base[:namespace].blank? && ref.namespace.blank?
+        base = permit_document(ref, attrs, :name, :description,
+                               :timestamp_format, :signature_algorithm, :signature_key_encoding,
+                               :signature_output_encoding, :signature_message, :allow_chunked_body,
+                               labels: {}, headers: [ :name, :value ])
 
         sources = build_credential_sources(attrs)
         rules_attrs = build_rules(attrs)

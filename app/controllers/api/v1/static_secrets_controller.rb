@@ -48,15 +48,10 @@ module Api
       private
 
       def assign_and_save!(ref, attrs)
-        ss_attrs = attrs.permit(
-          :namespace, :foreign_id, :name, :description,
+        ss_attrs = permit_document(
+          ref, attrs, :name, :description,
           labels: {}, inject_config: {}, replace_config: {}
         )
-        # A PUT upsert by foreign_id sets identity on the record before
-        # assignment; a blank body value must not wipe it.
-        ss_attrs.delete(:foreign_id) if ss_attrs[:foreign_id].blank? && ref.foreign_id.present?
-        ss_attrs.delete(:namespace) if ss_attrs[:namespace].blank? && ref.namespace.present?
-        ss_attrs[:namespace] = "default" if ss_attrs[:namespace].blank? && ref.namespace.blank?
 
         source_attrs = if attrs.key?(:source) && attrs[:source].present?
           attrs.require(:source).permit(:source_type, :secret, config: {})
