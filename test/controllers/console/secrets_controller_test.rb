@@ -169,6 +169,39 @@ module Console
       )
     end
 
+    test "POST create captures principal-derived settings via the kind select" do
+      post console_pg_dsn_secrets_url, params: {
+        secret: { namespace: "acme", foreign_id: "ui-value-from", database: "valuefromdb" },
+        settings: {
+          "0" => { name: "centaur.slack_channel_id", kind: "principal_label", value: "slack_channel_id" },
+          "1" => { name: "centaur.principal", kind: "principal_field", value: "foreign_id" },
+          "2" => { name: "app.tenant", kind: "literal", value: "centaur" }
+        },
+        source: { source_type: "env", reference: "VALUE_FROM_DSN" }
+      }
+      secret = PgDsnSecret.find_by!(namespace: "acme", foreign_id: "ui-value-from")
+      assert_redirected_to console_secret_path("pg_dsn", secret.oid)
+      assert_equal(
+        [
+          { "name" => "centaur.slack_channel_id", "value_from" => { "principal_label" => "slack_channel_id" } },
+          { "name" => "centaur.principal", "value_from" => { "principal_field" => "foreign_id" } },
+          { "name" => "app.tenant", "value" => "centaur" }
+        ],
+        secret.settings
+      )
+    end
+
+    test "POST create rejects an unknown principal_field from the console form" do
+      assert_no_difference "PgDsnSecret.count" do
+        post console_pg_dsn_secrets_url, params: {
+          secret: { namespace: "acme", foreign_id: "ui-bad-field", database: "badfielddb" },
+          settings: { "0" => { name: "app.tenant", kind: "principal_field", value: "labels" } },
+          source: { source_type: "env", reference: "SETTINGS_DSN" }
+        }
+      end
+      assert_response :unprocessable_entity
+    end
+
     test "PATCH update with no settings rows clears them" do
       secret = pg_dsn_secrets(:acme_reporting_pg)
       secret.update!(settings: [ { "name" => "app.tenant", "value" => "centaur" } ])

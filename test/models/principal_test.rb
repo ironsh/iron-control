@@ -183,6 +183,29 @@ class PrincipalTest < ActiveSupport::TestCase
     assert_equal({ "type" => "env", "var" => "PG_ANALYTICS_DSN" }, entries.first["dsn"])
   end
 
+  test "sync_postgres resolves value_from settings against the principal" do
+    principal = principals(:globex_user)
+    principal.update!(labels: { "slack_channel_id" => "C999" })
+    pg = pg_dsn_secrets(:acme_analytics_pg)
+    pg.update!(settings: [
+      {
+        "name" => "centaur.slack_channel_id",
+        "value_from" => { "principal_label" => "slack_channel_id" }
+      },
+      { "name" => "centaur.principal", "value_from" => { "principal_field" => "foreign_id" } }
+    ])
+    Grant.create!(principal: principal, pg_dsn_secret: pg, created_by: users(:globex_admin))
+
+    entry = principal.sync_postgres.fetch(0)
+    assert_equal(
+      [
+        { "name" => "centaur.slack_channel_id", "value" => "C999" },
+        { "name" => "centaur.principal", "value" => principal.foreign_id }
+      ],
+      entry["settings"]
+    )
+  end
+
   test "sync_postgres is empty without pg_dsn grants" do
     assert_empty principals(:globex_user).sync_postgres
   end

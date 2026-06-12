@@ -18,6 +18,17 @@ module ConsoleFormHelper
     record.errors[attr].present? ? "form-input-error" : ""
   end
 
+  # The { name, kind, value } a pg_dsn settings row renders from one stored
+  # setting: kind is "literal", or the value_from reference key with the
+  # referenced label/field name as the row's value.
+  def pg_setting_row_attrs(setting)
+    s = setting.is_a?(Hash) ? setting.deep_stringify_keys : {}
+    ref = s["value_from"]
+    kind = (PgDsnSecret::VALUE_FROM_KEYS & ref.keys.map(&:to_s)).first if ref.is_a?(Hash)
+    return { name: s["name"].to_s, kind: kind, value: ref[kind].to_s } if kind
+    { name: s["name"].to_s, kind: "literal", value: s["value"].to_s }
+  end
+
   # Flat list of human messages for the form's error summary. Nested source/rule
   # records are saved via autosave, which adds only a generic "is invalid" on the
   # parent for the association; we drop those and surface the children's own

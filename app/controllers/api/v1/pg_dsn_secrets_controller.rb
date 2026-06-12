@@ -49,11 +49,11 @@ module Api
       def assign_and_save!(ref, attrs)
         base = permit_document(
           ref, attrs, :name, :description, :database, :role,
-          labels: {}, settings: [ :name, :value ]
+          labels: {}, settings: [ :name, :value, { value_from: {} } ]
         )
-        # settings is normalized to the array of { "name", "value" } hashes the
-        # model stores and serializes.
-        base[:settings] = Array(base[:settings]).map { |s| s.to_h.slice("name", "value") }
+        # settings is normalized to the array of { "name", "value" } or
+        # { "name", "value_from" } hashes the model stores and serializes.
+        base[:settings] = Array(base[:settings]).map { |s| s.to_h.slice("name", "value", "value_from") }
 
         source_attrs = if attrs.key?(:dsn) && attrs[:dsn].present?
           attrs.require(:dsn).permit(:source_type, :secret, config: {})

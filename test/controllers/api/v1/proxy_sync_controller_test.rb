@@ -180,6 +180,26 @@ class ProxySyncControllerTest < ActionDispatch::IntegrationTest
     assert_equal [ { "name" => "app.tenant", "value" => "centaur" } ], entry["settings"]
   end
 
+  test "postgres entries resolve value_from settings against the proxy principal" do
+    @proxy.principal.update!(labels: { "slack_channel_id" => "C0123456789" })
+    pg = pg_dsn_secrets(:acme_analytics_pg)
+    pg.update!(settings: [
+      {
+        "name" => "centaur.slack_channel_id",
+        "value_from" => { "principal_label" => "slack_channel_id" }
+      }
+    ])
+
+    post api_v1_proxy_sync_url, params: {}.to_json, headers: auth_headers
+    assert_response :ok
+
+    entry = json_body.fetch("postgres").find { |e| e["foreign_id"] == pg.foreign_id }
+    assert_equal(
+      [ { "name" => "centaur.slack_channel_id", "value" => "C0123456789" } ],
+      entry["settings"]
+    )
+  end
+
   test "directly-granted secrets are emitted after role-granted ones" do
     # acme_channel holds github_token_inject and db_password_replace directly
     # (priority 100) and resolves acme_prod_api_key through the acme_infra role

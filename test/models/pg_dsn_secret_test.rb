@@ -127,6 +127,94 @@ class PgDsnSecretTest < ActiveSupport::TestCase
     )
   end
 
+  test "to_proxy_dsn resolves value_from principal labels and fields" do
+    principal = principals(:acme_channel)
+    principal.update!(labels: { "slack_channel_id" => "C0123456789" })
+    secret = with_dsn(PgDsnSecret.new(base_attrs(settings: [
+      {
+        "name" => "centaur.slack_channel_id",
+        "value_from" => { "principal_label" => "slack_channel_id" }
+      },
+      { "name" => "centaur.principal", "value_from" => { "principal_field" => "foreign_id" } },
+      { "name" => "centaur.principal_id", "value_from" => { "principal_field" => "id" } },
+      { "name" => "app.tenant", "value" => "centaur" }
+    ])))
+    assert secret.valid?
+
+    assert_equal(
+      [
+        { "name" => "centaur.slack_channel_id", "value" => "C0123456789" },
+        { "name" => "centaur.principal", "value" => principal.foreign_id },
+        { "name" => "centaur.principal_id", "value" => principal.oid },
+        { "name" => "app.tenant", "value" => "centaur" }
+      ],
+      secret.to_proxy_dsn(principal: principal)["settings"]
+    )
+  end
+
+  test "to_proxy_dsn resolves a label the principal does not carry as an empty string" do
+    secret = with_dsn(PgDsnSecret.new(base_attrs(settings: [
+      { "name" => "centaur.slack_admin", "value_from" => { "principal_label" => "centaur_slack_admin" } }
+    ])))
+
+    value = secret.to_proxy_dsn(principal: principals(:acme_channel)).dig("settings", 0, "value")
+    assert_equal "", value
+  end
+
+  test "to_proxy_dsn resolves value_from as an empty string without a principal" do
+    secret = with_dsn(PgDsnSecret.new(base_attrs(settings: [
+      { "name" => "centaur.slack_channel_id", "value_from" => { "principal_label" => "slack_channel_id" } }
+    ])))
+
+    assert_equal "", secret.to_proxy_dsn.dig("settings", 0, "value")
+  end
+
+  test "a setting with both value and value_from is rejected" do
+    secret = with_dsn(PgDsnSecret.new(base_attrs(settings: [
+      { "name" => "app.tenant", "value" => "x", "value_from" => { "principal_label" => "team" } }
+    ])))
+    assert_not secret.valid?
+    assert_includes secret.errors[:settings], "[0] value and value_from are mutually exclusive"
+  end
+
+  test "a value_from that is not an object is rejected" do
+    secret = with_dsn(PgDsnSecret.new(base_attrs(settings: [
+      { "name" => "app.tenant", "value_from" => "principal_label" }
+    ])))
+    assert_not secret.valid?
+    assert_includes secret.errors[:settings], "[0] value_from must be an object"
+  end
+
+  test "a value_from with unknown or extra keys is rejected" do
+    [
+      { "principal_token" => "x" },
+      { "principal_label" => "team", "principal_field" => "name" },
+      {}
+    ].each do |ref|
+      secret = with_dsn(PgDsnSecret.new(base_attrs(settings: [ { "name" => "app.tenant", "value_from" => ref } ])))
+      assert_not secret.valid?
+      assert_includes secret.errors[:settings],
+        "[0] value_from must have exactly one of principal_label or principal_field"
+    end
+  end
+
+  test "a value_from with a blank principal_label is rejected" do
+    secret = with_dsn(PgDsnSecret.new(base_attrs(settings: [
+      { "name" => "app.tenant", "value_from" => { "principal_label" => "" } }
+    ])))
+    assert_not secret.valid?
+    assert_includes secret.errors[:settings], "[0] principal_label can't be blank"
+  end
+
+  test "a value_from with an unknown principal_field is rejected" do
+    secret = with_dsn(PgDsnSecret.new(base_attrs(settings: [
+      { "name" => "app.tenant", "value_from" => { "principal_field" => "labels" } }
+    ])))
+    assert_not secret.valid?
+    assert_includes secret.errors[:settings],
+      %([0] unknown principal_field "labels" (one of: id, namespace, foreign_id, name))
+  end
+
   test "settings with a valid empty value are accepted and stringified" do
     secret = with_dsn(PgDsnSecret.new(base_attrs(settings: [ { "name" => "app.tenant", "value" => "" } ])))
     assert secret.valid?

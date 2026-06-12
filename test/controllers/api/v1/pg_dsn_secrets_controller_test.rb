@@ -184,6 +184,49 @@ module Api
         assert_equal "app.tenant", secret.settings.first["name"]
       end
 
+      test "POST persists value_from settings and echoes the stored reference" do
+        body = {
+          data: {
+            namespace: "acme",
+            foreign_id: "value-from-pg",
+            database: "value-from-db",
+            settings: [
+              { name: "centaur.slack_channel_id", value_from: { principal_label: "slack_channel_id" } },
+              { name: "centaur.principal", value_from: { principal_field: "foreign_id" } }
+            ],
+            dsn: { source_type: "env", config: { var: "VALUE_FROM_DSN" } }
+          }
+        }
+
+        post api_v1_pg_dsn_secrets_url, params: body.to_json, headers: auth_headers
+        assert_response :created
+
+        assert_equal(
+          [
+            { "name" => "centaur.slack_channel_id", "value_from" => { "principal_label" => "slack_channel_id" } },
+            { "name" => "centaur.principal", "value_from" => { "principal_field" => "foreign_id" } }
+          ],
+          json_body.dig("data", "settings")
+        )
+      end
+
+      test "POST with an invalid value_from is rejected" do
+        body = {
+          data: {
+            namespace: "acme",
+            foreign_id: "bad-value-from-pg",
+            database: "bad-value-from-db",
+            settings: [ { name: "app.tenant", value_from: { principal_field: "labels" } } ],
+            dsn: { source_type: "env", config: { var: "BAD_VALUE_FROM_DSN" } }
+          }
+        }
+
+        assert_no_difference -> { PgDsnSecret.count } do
+          post api_v1_pg_dsn_secrets_url, params: body.to_json, headers: auth_headers
+        end
+        assert_response :unprocessable_entity
+      end
+
       test "POST with an invalid setting name is rejected" do
         body = {
           data: {
