@@ -143,6 +143,44 @@ module Api
         assert_equal 1, secret.rules.count
       end
 
+      test "PUT switches a secret from credentials_provider to keyfile" do
+        secret = gcp_auth_secrets(:acme_bigquery)
+        body = {
+          data: {
+            name: secret.name,
+            credentials_provider: nil,
+            keyfile: { source_type: "env", config: { var: "BQ_SA" } },
+            scopes: [ "scopeA" ]
+          }
+        }
+
+        put api_v1_gcp_auth_secret_url(id: secret.oid), params: body.to_json, headers: auth_headers
+        assert_response :ok
+
+        secret.reload
+        assert_nil secret.credentials_provider
+        assert_equal "BQ_SA", secret.keyfile_source.config["var"]
+      end
+
+      test "PUT switches a secret from keyfile to credentials_provider and clears the stale subject" do
+        secret = gcp_auth_secrets(:acme_gcs_keyfile)
+        body = {
+          data: {
+            name: secret.name,
+            credentials_provider: { type: "workload_identity" },
+            scopes: [ "scopeA" ]
+          }
+        }
+
+        put api_v1_gcp_auth_secret_url(id: secret.oid), params: body.to_json, headers: auth_headers
+        assert_response :ok
+
+        secret.reload
+        assert_equal "workload_identity", secret.credentials_provider["type"]
+        assert_nil secret.subject
+        assert_nil secret.keyfile_source
+      end
+
       test "PUT upserts a new gcp_auth secret by foreign_id" do
         body = {
           data: {

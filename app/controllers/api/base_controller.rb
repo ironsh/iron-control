@@ -57,6 +57,24 @@ module Api
       data_params[:namespace].presence || "default"
     end
 
+    # Permits the body of a document write (create or PUT upsert) with replace
+    # semantics: a permitted field that is omitted from the body, or sent as
+    # null (which strong params drops for hash and array filters), is reset to
+    # its column default rather than retained from the existing record, so the
+    # body always replaces the whole document. The identity columns (namespace,
+    # foreign_id) are the exception: an upsert by foreign_id sets them on the
+    # record before assignment, so a blank body value must not wipe them.
+    def permit_document(ref, attrs, *scalars, **filters)
+      permitted = attrs.permit(:namespace, :foreign_id, *scalars, **filters)
+      permitted.delete(:foreign_id) if permitted[:foreign_id].blank? && ref.foreign_id.present?
+      permitted.delete(:namespace) if permitted[:namespace].blank? && ref.namespace.present?
+      permitted[:namespace] = "default" if permitted[:namespace].blank? && ref.namespace.blank?
+
+      defaults = ref.class.column_defaults
+      columns = (scalars + filters.keys).map(&:to_s)
+      permitted.with_defaults(columns.index_with { |c| defaults[c] })
+    end
+
     # Resolves the target of a PUT/PATCH write so the verb behaves as an upsert.
     #
     # When :id is an opaque id for this model it must reference an existing

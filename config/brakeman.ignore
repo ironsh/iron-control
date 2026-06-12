@@ -1,28 +1,5 @@
 {
   "ignored_warnings": [
-    {
-      "warning_type": "Mass Assignment",
-      "warning_code": 105,
-      "fingerprint": "e6ef0dd97bb24b975ba5af756aa4f4c760097aa597a6da51699c3e1cd821f005",
-      "check_name": "PermitAttributes",
-      "message": "Potentially dangerous key allowed for mass assignment",
-      "file": "app/controllers/api/v1/pg_dsn_secrets_controller.rb",
-      "line": 51,
-      "link": "https://brakemanscanner.org/docs/warning_types/mass_assignment/",
-      "code": "attrs.permit(:namespace, :foreign_id, :name, :description, :database, :role, :labels => ({}), :settings => ([:name, :value, { :value_from => ({}) }]))",
-      "render_path": null,
-      "location": {
-        "type": "method",
-        "class": "Api::V1::PgDsnSecretsController",
-        "method": "assign_and_save!"
-      },
-      "user_input": ":role",
-      "confidence": "Medium",
-      "cwe_id": [
-        915
-      ],
-      "note": "False positive: `role` here is a Postgres SET ROLE string on the upstream session, not an authorization role. PgDsnSecret has no authz attributes; this controller only ever assigns to that model."
-    }
   ],
   "brakeman_version": "8.0.4"
 }
