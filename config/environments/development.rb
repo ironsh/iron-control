@@ -15,6 +15,24 @@ Rails.application.configure do
   # Enable server timing.
   config.server_timing = true
 
+  # Log to STDOUT as single-line JSON with the current request id as a default log tag,
+  # matching production.
+  config.log_tags = [ :request_id ]
+  config.logger = ActiveSupport::TaggedLogging.logger(STDOUT)
+  config.logger.formatter = JsonLogFormatter.new
+
+  # Collapse the default multi-line request logs into a single JSON event per
+  # request. The Raw formatter emits a hash that JsonLogFormatter merges into
+  # the JSON log entry.
+  config.lograge.enabled = true
+  config.lograge.formatter = Lograge::Formatters::Raw.new
+  config.lograge.custom_payload do |controller|
+    { request_id: controller.request.request_id }
+  end
+
+  # Skip ANSI color codes; they are noise inside JSON log entries.
+  config.colorize_logging = false
+
   # Enable/disable Action Controller caching. By default Action Controller caching is disabled.
   # Run rails dev:cache to toggle Action Controller caching.
   if Rails.root.join("tmp/caching-dev.txt").exist?
