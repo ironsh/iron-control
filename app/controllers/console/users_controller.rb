@@ -9,8 +9,8 @@ module Console
     before_action :set_user, only: %i[approve disable promote]
 
     def index
-      @pending = User.pending.order(:created_at)
-      @users = User.where.not(status: "pending").order(admin: :desc, email: :asc)
+      @pending = User.pending.includes(:user_identities).order(:created_at)
+      @users = User.where.not(status: "pending").includes(:user_identities).order(admin: :desc, email: :asc)
     end
 
     def approve

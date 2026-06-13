@@ -27,6 +27,14 @@ module Console
       assert_select "td", /pending@acme.example/
     end
 
+    test "the index shows IdP chips for linked identities and a password chip otherwise" do
+      sign_in users(:acme_admin)
+      get console_users_url
+      assert_select "span", text: "Google"   # acme_admin is linked via Google
+      assert_select "span", text: "Slack"    # pending_user is linked via Slack
+      assert_select "span", text: "password" # member_user has no linked identity
+    end
+
     test "approve activates a pending user and records the approver" do
       admin = users(:acme_admin)
       sign_in admin
