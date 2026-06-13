@@ -13,6 +13,14 @@ Rails.application.routes.draw do
   get "login", to: "sessions#new", as: :login
   post "login", to: "sessions#create"
   delete "logout", to: "sessions#destroy", as: :logout
+  # Holding page for a signed-in user whose account is still pending approval.
+  get "pending", to: "sessions#pending", as: :pending
+
+  # Console SSO login, keyed by provider (/auth/google/start). Deliberately
+  # unauthenticated; distinct /auth/* prefix avoids colliding with the broker's
+  # /oauth/:slug/* consent flow below.
+  get "auth/:provider/start", to: "session_oauth#start", as: :auth_start
+  get "auth/:provider/callback", to: "session_oauth#callback", as: :auth_callback
 
   # Operator console (server-rendered HTML UI).
   root "console#principals"
@@ -43,6 +51,17 @@ Rails.application.routes.draw do
     resources :oauth_apps, only: %i[new create edit update], as: :oauth_app_forms
   end
   get "console/oauth_apps/:id", to: "console#oauth_app", as: :console_oauth_app
+
+  # Operator (console user) management. Admin-only; pending users are approved here.
+  namespace :console do
+    resources :users, only: %i[index] do
+      member do
+        post :approve
+        post :disable
+        post :promote
+      end
+    end
+  end
 
   namespace :api do
     namespace :v1 do

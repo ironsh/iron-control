@@ -69,6 +69,11 @@ module IronTasks
 end
 
 namespace :iron do
+  desc "Create the initial user + API key from IRON_CONTROL_INITIAL_* env vars (no-op if unset or a user already exists)."
+  task bootstrap: :environment do
+    Iron::Bootstrap.run!
+  end
+
   namespace :principal do
     desc "Create a principal. Env: [NAME], [FOREIGN_ID], [NAMESPACE=default], [LABELS=k=v,..]"
     task add: :environment do
