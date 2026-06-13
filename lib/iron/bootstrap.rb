@@ -23,7 +23,9 @@ module Iron
         ActiveRecord::Base.connection.execute("SELECT pg_advisory_xact_lock(#{ADVISORY_LOCK_KEY})")
         return if User.exists?
 
-        user = User.create!(email: email, password: password)
+        # The initial operator predates any approver, so it is created active and
+        # admin -- it is the account that approves everyone else.
+        user = User.create!(email: email, password: password, status: "active", admin: true)
 
         api_key = ApiKey.new(user: user, name: "bootstrap")
         unless supplied_token.empty?

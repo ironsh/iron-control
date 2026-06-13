@@ -1,0 +1,6 @@
+acme_admin_google:
+  user: acme_admin
+  provider: google
+  subject: google-existing-sub
+  email: admin@acme.example
+  email_verified: true

@@ -23,6 +23,7 @@ class Iron::BootstrapTest < ActiveSupport::TestCase
     Principal.delete_all
     Role.delete_all
     ApiKey.unscoped.delete_all
+    UserIdentity.delete_all
     User.delete_all
     @env = ENV.to_hash.slice(
       "IRON_CONTROL_INITIAL_USER_EMAIL",
@@ -67,6 +68,8 @@ class Iron::BootstrapTest < ActiveSupport::TestCase
     user = User.find_by!(email: "boot@example.com")
     assert_equal user, user.authenticate("password123456")
     assert_equal user, ApiKey.find_by_token(VALID_TOKEN).user
+    assert user.active?, "the bootstrap operator must be active"
+    assert user.admin?, "the bootstrap operator must be an admin"
   end
 
   test "honors a supplied API key token" do

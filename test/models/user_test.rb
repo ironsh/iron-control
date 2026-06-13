@@ -40,10 +40,9 @@ class UserTest < ActiveSupport::TestCase
     assert_includes dup.errors[:email], "has already been taken"
   end
 
-  test "requires password on create" do
+  test "is valid without a password (SSO-only user)" do
     user = User.new(valid_attrs.except(:password))
-    assert_not user.valid?
-    assert_includes user.errors[:password], "can't be blank"
+    assert user.valid?
   end
 
   test "rejects short passwords" do
@@ -69,5 +68,32 @@ class UserTest < ActiveSupport::TestCase
   test "find_by_oid round-trips" do
     user = users(:acme_admin)
     assert_equal user, User.find_by_oid(user.oid)
+  end
+
+  test "status defaults to pending" do
+    assert_equal "pending", User.new.status
+  end
+
+  test "rejects an unknown status" do
+    user = User.new(valid_attrs(status: "bogus"))
+    assert_not user.valid?
+    assert_includes user.errors[:status], "is not included in the list"
+  end
+
+  test "approve! activates and records the approver" do
+    user = User.create!(valid_attrs(email: "approve-me@example.com").except(:password))
+    admin = users(:acme_admin)
+    user.approve!(by: admin)
+    assert user.reload.active?
+    assert_equal admin, user.approved_by
+    assert_not_nil user.approved_at
+  end
+
+  test "destroys linked identities" do
+    user = User.create!(valid_attrs(email: "with-identity@example.com").except(:password))
+    user.user_identities.create!(provider: "google", subject: "destroy-sub")
+    assert_difference -> { UserIdentity.count }, -1 do
+      user.destroy
+    end
   end
 end

@@ -33,11 +33,15 @@ module Broker
     end
 
     # Exchanges an authorization code for tokens. Raises Broker::ExchangeError on
-    # any failure (non-2xx, unparseable body, empty access_token, or a missing
-    # refresh_token -- the last being a misconfiguration given Google's
-    # access_type=offline + prompt=consent always return one).
+    # any failure (non-2xx, unparseable body, empty access_token, or -- when
+    # require_refresh_token is true -- a missing refresh_token).
+    #
+    # require_refresh_token defaults to true for the broker consent flow, where
+    # access_type=offline + prompt=consent always return one and its absence means
+    # the app is misconfigured. The console-login flow passes false: it requests no
+    # offline access and only needs the id_token to identify the operator.
     def exchange(token_endpoint:, client_id:, client_secret:, code:, redirect_uri:,
-                 code_verifier:, timeout: DEFAULT_TIMEOUT)
+                 code_verifier:, timeout: DEFAULT_TIMEOUT, require_refresh_token: true)
       raise ArgumentError, "token endpoint is required" if token_endpoint.blank?
       raise ArgumentError, "client_id is required" if client_id.blank?
       raise ArgumentError, "code is required" if code.blank?
@@ -57,7 +61,7 @@ module Broker
 
       classify_error(response.status, response.body) if response.status / 100 != 2
 
-      parse_success(response)
+      parse_success(response, require_refresh_token: require_refresh_token)
     end
 
     private
@@ -84,7 +88,7 @@ module Broker
       raise ExchangeError.new("token endpoint request failed: #{e.class}", stage: "network")
     end
 
-    def parse_success(response)
+    def parse_success(response, require_refresh_token:)
       parsed = JSON.parse(response.body)
       access_token = parsed["access_token"]
       if access_token.blank?
@@ -93,9 +97,10 @@ module Broker
       end
 
       refresh_token = parsed["refresh_token"]
-      if refresh_token.blank?
+      if require_refresh_token && refresh_token.blank?
         # With access_type=offline + prompt=consent a refresh token is always
-        # returned; its absence means the app is misconfigured at the IdP.
+        # returned; its absence means the app is misconfigured at the IdP. The
+        # login flow opts out of this check (it requests no offline access).
         raise ExchangeError.new("token endpoint returned no refresh_token",
                                 stage: "oauth", code: "missing_refresh_token", status: response.status)
       end
