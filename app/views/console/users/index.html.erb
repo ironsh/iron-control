@@ -1,28 +1,5 @@
 <% content_for :title, "Users · Iron Control" %>
 
-<% status_badge = ->(user) do
-     classes = case user.status
-               when "active" then "bg-emerald-500/10 text-emerald-300 ring-emerald-500/20"
-               when "pending" then "bg-amber-500/10 text-amber-300 ring-amber-500/20"
-               else "bg-zinc-500/10 text-zinc-400 ring-zinc-500/20"
-               end
-     content_tag(:span, user.status, class: "rounded px-1.5 py-0.5 text-xs ring-1 #{classes}")
-   end %>
-
-<% idp_chips = ->(user) do
-     providers = user.user_identities.map(&:provider).uniq.sort
-     chips =
-       if providers.empty?
-         # No linked identity: a password-login account.
-         [ content_tag(:span, "password", class: "rounded bg-ink-800/60 px-1.5 py-0.5 text-xs text-zinc-500 ring-1 ring-ink-600") ]
-       else
-         providers.map do |provider|
-           content_tag(:span, provider.capitalize, class: "rounded bg-ink-700/60 px-1.5 py-0.5 text-xs text-zinc-300 ring-1 ring-ink-500")
-         end
-       end
-     content_tag(:div, safe_join(chips), class: "flex flex-wrap gap-1")
-   end %>
-
 <div class="mb-8">
   <h1 class="text-2xl font-bold text-zinc-100">Users</h1>
   <p class="mt-1 text-sm text-zinc-500">Operator accounts. Approve pending sign-ins, promote admins, or disable access.</p>
@@ -39,7 +16,7 @@
               <div class="text-zinc-100"><%= user.email %></div>
               <% if user.name.present? %><div class="text-xs text-zinc-500"><%= user.name %></div><% end %>
             </td>
-            <td class="px-5 py-3"><%= idp_chips.call(user) %></td>
+            <td class="px-5 py-3"><%= user_idp_chips(user) %></td>
             <td class="px-5 py-3 text-zinc-500">requested <%= time_ago_in_words(user.created_at) %> ago</td>
             <td class="px-5 py-3 text-right">
               <%= button_to "Approve", approve_console_user_path(user.oid), method: :post,
@@ -73,9 +50,9 @@
             <div class="text-zinc-100"><%= user.email %><% if user == current_user %><span class="ml-2 text-xs text-zinc-500">(you)</span><% end %></div>
             <% if user.name.present? %><div class="text-xs text-zinc-500"><%= user.name %></div><% end %>
           </td>
-          <td class="px-5 py-3"><%= status_badge.call(user) %></td>
+          <td class="px-5 py-3"><%= user_status_badge(user) %></td>
           <td class="px-5 py-3 text-zinc-400"><%= user.admin? ? "admin" : "operator" %></td>
-          <td class="px-5 py-3"><%= idp_chips.call(user) %></td>
+          <td class="px-5 py-3"><%= user_idp_chips(user) %></td>
           <td class="px-5 py-3">
             <div class="flex items-center justify-end gap-2">
               <% unless user.admin? %>

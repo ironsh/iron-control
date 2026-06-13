@@ -32,7 +32,7 @@ module Console
       get console_users_url
       assert_select "span", text: "Google"   # acme_admin is linked via Google
       assert_select "span", text: "Slack"    # pending_user is linked via Slack
-      assert_select "span", text: "password" # member_user has no linked identity
+      assert_select "span", text: "Password" # member_user has no linked identity
     end
 
     test "approve activates a pending user and records the approver" do

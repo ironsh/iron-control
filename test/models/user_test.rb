@@ -96,4 +96,62 @@ class UserTest < ActiveSupport::TestCase
       user.destroy
     end
   end
+
+  # --- link_or_provision -----------------------------------------------------
+
+  def identity(overrides = {})
+    { subject: "sub-1", email: "newcomer@example.com", email_verified: true, name: "New Comer" }.merge(overrides)
+  end
+
+  test "link_or_provision creates a pending user + identity for an unknown email" do
+    user = nil
+    assert_difference -> { User.count }, 1 do
+      assert_difference -> { UserIdentity.count }, 1 do
+        user = User.link_or_provision(provider: "google", identity: identity)
+      end
+    end
+    assert user.pending?
+    assert_not user.admin?
+    assert_equal "New Comer", user.name
+    assert_equal [ [ "google", "sub-1" ] ], user.user_identities.pluck(:provider, :subject)
+  end
+
+  test "link_or_provision returns the existing user for a returning identity" do
+    existing = user_identities(:acme_admin_google)
+    user = nil
+    assert_no_difference [ "User.count", "UserIdentity.count" ] do
+      user = User.link_or_provision(provider: existing.provider,
+                                    identity: identity(subject: existing.subject, email: existing.email))
+    end
+    assert_equal existing.user, user
+  end
+
+  test "link_or_provision links a new identity to an existing user by verified email" do
+    target = users(:globex_admin)
+    user = nil
+    assert_no_difference -> { User.count } do
+      assert_difference -> { target.user_identities.count }, 1 do
+        user = User.link_or_provision(provider: "slack",
+                                      identity: identity(subject: "slack-new", email: target.email))
+      end
+    end
+    assert_equal target, user
+  end
+
+  test "link_or_provision will not let an unverified email adopt an existing account" do
+    target = users(:globex_admin)
+    assert_raises(ActiveRecord::RecordInvalid) do
+      User.link_or_provision(provider: "slack",
+                             identity: identity(subject: "spoof", email: target.email, email_verified: false))
+    end
+  end
+
+  test "link_or_provision makes a bootstrap-allowlisted email active and admin" do
+    ENV["IRON_CONTROL_BOOTSTRAP_ADMINS"] = "boss@example.com"
+    user = User.link_or_provision(provider: "google", identity: identity(subject: "boss-sub", email: "boss@example.com"))
+    assert user.active?
+    assert user.admin?
+  ensure
+    ENV.delete("IRON_CONTROL_BOOTSTRAP_ADMINS")
+  end
 end

@@ -67,7 +67,7 @@ class SessionOauthController < ApplicationController
 
     result = exchange_code(params[:code], flow["code_verifier"])
     identity = @provider.identity_from(result, client_id: ConsoleAuth.client_id(@key))
-    sign_in(find_or_provision_user(identity))
+    sign_in(User.link_or_provision(provider: @key, identity: identity))
   rescue Broker::ExchangeError => e
     Rails.logger.error { "console login exchange failed (#{@key}): #{e.reason}" }
     redirect_to login_path, alert: "Sign in failed. Please try again."
@@ -119,44 +119,6 @@ class SessionOauthController < ApplicationController
   # The callback redirect URI registered with the IdP: "<public base>/auth/<provider>/callback".
   def callback_redirect_uri
     URI.join(public_base_url, "/auth/#{@key}/callback").to_s
-  end
-
-  # Finds the user behind an identity, linking or creating one as needed. Wrapped
-  # in a transaction so a user and its identity are created atomically.
-  def find_or_provision_user(identity)
-    User.transaction do
-      existing = UserIdentity.find_by(provider: @key, subject: identity[:subject])
-      if existing
-        existing.update!(email: identity[:email], email_verified: identity[:email_verified])
-        user = existing.user
-        user.update!(name: identity[:name]) if identity[:name].present? && user.name.blank?
-        next user
-      end
-
-      user = link_target(identity) || User.create!(new_user_attributes(identity))
-      user.user_identities.create!(
-        provider: @key, subject: identity[:subject],
-        email: identity[:email], email_verified: identity[:email_verified]
-      )
-      user
-    end
-  end
-
-  # An existing user to link this identity to: only when the IdP marked the email
-  # verified (an unverified email must not adopt an existing account).
-  def link_target(identity)
-    return nil unless identity[:email_verified] && identity[:email].present?
-    User.find_by(email: identity[:email].strip.downcase)
-  end
-
-  def new_user_attributes(identity)
-    admin = ConsoleAuth.bootstrap_admin?(identity[:email])
-    {
-      email: identity[:email],
-      name: identity[:name],
-      status: admin ? :active : :pending,
-      admin: admin
-    }
   end
 
   def sign_in(user)
