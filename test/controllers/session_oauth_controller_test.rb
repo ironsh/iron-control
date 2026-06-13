@@ -116,7 +116,7 @@ class SessionOauthControllerTest < ActionDispatch::IntegrationTest
 
   test "callback makes a bootstrap-allowlisted email active and admin" do
     run_callback(sub: "boss-sub", email: "boss@acme.example")
-    assert_redirected_to root_path
+    assert_redirected_to console_principals_path
     user = User.find_by(email: "boss@acme.example")
     assert user.active?
     assert user.admin?
@@ -129,7 +129,7 @@ class SessionOauthControllerTest < ActionDispatch::IntegrationTest
         run_callback(sub: "fresh-sub", email: existing.email, email_verified: true)
       end
     end
-    assert_redirected_to root_path
+    assert_redirected_to console_principals_path
     assert_equal existing.id, session[:user_id]
   end
 
@@ -160,7 +160,7 @@ class SessionOauthControllerTest < ActionDispatch::IntegrationTest
         run_callback(sub: identity.subject, email: identity.email)
       end
     end
-    assert_redirected_to root_path
+    assert_redirected_to console_principals_path
     assert_equal identity.user_id, session[:user_id]
   end
 

@@ -45,6 +45,10 @@ module Oauth
       }.merge(overrides).to_json
     end
 
+    def sign_in(user)
+      post login_url, params: { email: user.email, password: "password123456" }
+    end
+
     # Runs /start and returns the state extracted from the IdP redirect (the flow
     # cookie is set in the shared integration cookie jar as a side effect).
     def start_flow(slug: "google", **params)
@@ -83,6 +87,15 @@ module Oauth
       get oauth_start_url(slug: "google")
       assert_response :redirect
       assert_nil session[:user_id]
+    end
+
+    test "start works with a pending console session" do
+      sign_in users(:pending_user)
+
+      get oauth_start_url(slug: "google")
+
+      assert_response :redirect
+      assert_equal "accounts.google.com", URI.parse(response.location).host
     end
 
     test "start 404s an unknown slug" do
@@ -136,6 +149,22 @@ module Oauth
       assert cred.next_attempt_at.present?
       assert_nil cred.created_by
       assert_includes response.body, cred.oid
+    end
+
+    test "callback works with a disabled console session" do
+      user = users(:member_user)
+      sign_in user
+      state = start_flow
+      user.update!(status: :disabled)
+      stub_exchange(status: 200, body: token_body)
+
+      assert_difference -> { BrokerCredential.count }, 1 do
+        get oauth_callback_url(slug: "google"), params: { state: state, code: "auth-code" }
+      end
+
+      assert_response :ok
+      assert_match "Connected", response.body
+      assert_equal user.id, session[:user_id]
     end
 
     test "re-consent for the same account updates the existing credential and revives a dead one" do

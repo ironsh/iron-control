@@ -61,10 +61,10 @@ class User < ApplicationRecord
   end
   private_class_method :linkable_user
 
-  # Attributes for a brand-new SSO user: active + admin when bootstrap-allowlisted,
-  # pending otherwise.
+  # Attributes for a brand-new SSO user: active + admin when bootstrap-allowlisted
+  # by a verified IdP email, pending otherwise.
   def self.provisioned_attributes(identity)
-    admin = ConsoleAuth.bootstrap_admin?(identity[:email])
+    admin = identity[:email_verified] == true && ConsoleAuth.bootstrap_admin?(identity[:email])
     { email: identity[:email], name: identity[:name], status: admin ? :active : :pending, admin: admin }
   end
   private_class_method :provisioned_attributes

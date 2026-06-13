@@ -30,18 +30,7 @@ class SessionsController < ApplicationController
       return render :new, status: :unprocessable_entity
     end
 
-    if user.disabled?
-      flash.now[:alert] = "Your account is disabled."
-      return render :new, status: :unprocessable_entity
-    end
-
-    reset_session
-    session[:user_id] = user.id
-    if user.active?
-      redirect_to console_principals_path, notice: "Signed in as #{user.email}."
-    else
-      redirect_to pending_path, notice: "Your account is awaiting approval."
-    end
+    sign_in_console_user(user, disabled: :render)
   end
 
   def destroy

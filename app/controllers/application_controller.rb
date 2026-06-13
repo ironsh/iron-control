@@ -68,6 +68,28 @@ class ApplicationController < ActionController::Base
     redirect_to root_path, alert: "That page is restricted to admins." unless current_user&.admin?
   end
 
+  # Establishes the console cookie session and sends the user to the right
+  # post-login page. Password login re-renders for disabled accounts; SSO login
+  # redirects because it is returning from an external provider.
+  def sign_in_console_user(user, disabled: :redirect)
+    if user.disabled?
+      if disabled == :render
+        flash.now[:alert] = "Your account is disabled."
+        return render :new, status: :unprocessable_entity
+      end
+
+      return redirect_to login_path, alert: "Your account is disabled."
+    end
+
+    reset_session
+    session[:user_id] = user.id
+    if user.active?
+      redirect_to console_principals_path, notice: "Signed in as #{user.email}."
+    else
+      redirect_to pending_path, notice: "Your account is awaiting approval."
+    end
+  end
+
   def render_not_found(e)
     render plain: e.message, status: :not_found
   end

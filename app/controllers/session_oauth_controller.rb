@@ -67,7 +67,7 @@ class SessionOauthController < ApplicationController
 
     result = exchange_code(params[:code], flow["code_verifier"])
     identity = @provider.identity_from(result, client_id: ConsoleAuth.client_id(@key))
-    sign_in(User.link_or_provision(provider: @key, identity: identity))
+    sign_in_console_user(User.link_or_provision(provider: @key, identity: identity))
   rescue Broker::ExchangeError => e
     Rails.logger.error { "console login exchange failed (#{@key}): #{e.reason}" }
     redirect_to login_path, alert: "Sign in failed. Please try again."
@@ -119,20 +119,6 @@ class SessionOauthController < ApplicationController
   # The callback redirect URI registered with the IdP: "<public base>/auth/<provider>/callback".
   def callback_redirect_uri
     URI.join(public_base_url, "/auth/#{@key}/callback").to_s
-  end
-
-  def sign_in(user)
-    if user.disabled?
-      return redirect_to login_path, alert: "Your account is disabled."
-    end
-
-    reset_session
-    session[:user_id] = user.id
-    if user.active?
-      redirect_to root_path, notice: "Signed in as #{user.email}."
-    else
-      redirect_to pending_path, notice: "Your account is awaiting approval."
-    end
   end
 
   def read_and_clear_flow_cookie
