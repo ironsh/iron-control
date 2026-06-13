@@ -32,6 +32,10 @@ class ApplicationController < ActionController::Base
   # controllers descend from ActionController::API, not this class, so they keep
   # their own ApiKey/proxy-token auth and are unaffected.
   before_action :require_login
+  # A signed-in user must also be approved (active) to use the console. The login
+  # and pending controllers skip this so pending users can reach the holding page
+  # and sign out.
+  before_action :require_active_account
 
   private
 
@@ -45,6 +49,45 @@ class ApplicationController < ActionController::Base
   # form rather than rendering the page.
   def require_login
     redirect_to login_path unless current_user
+  end
+
+  # Second gate, after require_login: a disabled user is signed out; a pending
+  # (not-yet-approved) user is sent to the holding page. Active users pass through.
+  def require_active_account
+    return unless current_user
+    if current_user.disabled?
+      reset_session
+      redirect_to login_path, alert: "Your account is disabled."
+    elsif current_user.pending?
+      redirect_to pending_path
+    end
+  end
+
+  # Guard for admin-only controllers (e.g. user management). Not a global gate.
+  def require_admin
+    redirect_to root_path, alert: "That page is restricted to admins." unless current_user&.admin?
+  end
+
+  # Establishes the console cookie session and sends the user to the right
+  # post-login page. Password login re-renders for disabled accounts; SSO login
+  # redirects because it is returning from an external provider.
+  def sign_in_console_user(user, disabled: :redirect)
+    if user.disabled?
+      if disabled == :render
+        flash.now[:alert] = "Your account is disabled."
+        return render :new, status: :unprocessable_entity
+      end
+
+      return redirect_to login_path, alert: "Your account is disabled."
+    end
+
+    reset_session
+    session[:user_id] = user.id
+    if user.active?
+      redirect_to console_principals_path, notice: "Signed in as #{user.email}."
+    else
+      redirect_to pending_path, notice: "Your account is awaiting approval."
+    end
   end
 
   def render_not_found(e)

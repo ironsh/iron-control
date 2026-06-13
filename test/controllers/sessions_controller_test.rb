@@ -33,4 +33,36 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to login_path
     assert_nil session[:user_id]
   end
+
+  test "a pending user is signed in but routed to the holding page" do
+    pending = users(:pending_user)
+    post login_url, params: { email: pending.email, password: "password123456" }
+    assert_redirected_to pending_path
+    assert_equal pending.id, session[:user_id]
+  end
+
+  test "a disabled user cannot sign in" do
+    disabled = users(:disabled_user)
+    post login_url, params: { email: disabled.email, password: "password123456" }
+    assert_response :unprocessable_entity
+    assert_nil session[:user_id]
+  end
+
+  test "a pending user hitting a console page is bounced to the holding page" do
+    post login_url, params: { email: users(:pending_user).email, password: "password123456" }
+    get console_principals_url
+    assert_redirected_to pending_path
+  end
+
+  test "the pending page is reachable by a pending user" do
+    post login_url, params: { email: users(:pending_user).email, password: "password123456" }
+    get pending_url
+    assert_response :ok
+  end
+
+  test "an active user visiting the pending page is sent to the console" do
+    post login_url, params: { email: @operator.email, password: "password123456" }
+    get pending_url
+    assert_redirected_to console_principals_path
+  end
 end

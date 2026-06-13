@@ -83,6 +83,13 @@ module Broker
       assert_equal "missing_refresh_token", err.code
     end
 
+    test "require_refresh_token: false tolerates a missing refresh_token (login flow)" do
+      client, _ = client_with(status: 200, body: success_body(refresh_token: nil))
+      result = client.exchange(**base_args, require_refresh_token: false)
+      assert_equal "AT", result.access_token
+      assert_nil result.refresh_token
+    end
+
     test "empty access_token raises a parse error" do
       client, _ = client_with(status: 200, body: success_body(access_token: ""))
       err = assert_raises(ExchangeError) { client.exchange(**base_args) }
