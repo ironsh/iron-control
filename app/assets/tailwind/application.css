@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../../../config/tailwind.config.js";
 
 /* Console form building blocks, matching the iron/ink terminal aesthetic.
    Three-level surface hierarchy: page (ink-900) < section card (ink-800) <
