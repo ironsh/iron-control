@@ -1,24 +1,24 @@
 <% content_for :title, "Users · Iron Control" %>
 
 <div class="mb-8">
-  <h1 class="text-2xl font-bold text-zinc-100">Users</h1>
-  <p class="mt-1 text-sm text-zinc-500">Operator accounts. Approve pending sign-ins, promote admins, or disable access.</p>
+  <h1 class="page-title">Users</h1>
+  <p class="page-subtitle">Operator accounts. Approve pending sign-ins, promote admins, or disable access.</p>
 </div>
 
 <% if @pending.any? %>
   <h2 class="mb-3 text-xs font-semibold uppercase tracking-wider text-amber-300/80"><%= pluralize(@pending.size, "pending approval") %></h2>
   <div class="mb-10 overflow-hidden rounded-xl border border-amber-500/30 bg-amber-500/[0.04]">
-    <table class="min-w-full divide-y divide-ink-600 text-sm">
+    <table class="console-table">
       <tbody class="divide-y divide-ink-700">
         <% @pending.each do |user| %>
           <tr>
-            <td class="px-5 py-3">
+            <td class="console-td">
               <div class="text-zinc-100"><%= user.email %></div>
               <% if user.name.present? %><div class="text-xs text-zinc-500"><%= user.name %></div><% end %>
             </td>
-            <td class="px-5 py-3"><%= user_idp_chips(user) %></td>
-            <td class="px-5 py-3 text-zinc-500">requested <%= time_ago_in_words(user.created_at) %> ago</td>
-            <td class="px-5 py-3 text-right">
+            <td class="console-td"><%= user_idp_chips(user) %></td>
+            <td class="console-td text-zinc-500">requested <%= time_ago_in_words(user.created_at) %> ago</td>
+            <td class="console-td text-right">
               <%= button_to "Approve", approve_console_user_path(user.oid), method: :post,
                     class: "cursor-pointer rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-emerald-300 transition-colors hover:bg-emerald-500/20" %>
             </td>
@@ -29,15 +29,15 @@
   </div>
 <% end %>
 
-<div class="overflow-hidden rounded-xl border border-ink-600 bg-ink-850/60">
-  <table class="min-w-full divide-y divide-ink-600 text-sm">
-    <thead class="bg-ink-800/80 text-left text-xs uppercase tracking-wider text-zinc-500">
+<div class="console-panel">
+  <table class="console-table">
+    <thead class="console-table-head">
       <tr>
-        <th class="px-5 py-3 font-medium">Email</th>
-        <th class="px-5 py-3 font-medium">Status</th>
-        <th class="px-5 py-3 font-medium">Role</th>
-        <th class="px-5 py-3 font-medium">IdPs</th>
-        <th class="px-5 py-3 font-medium text-right"></th>
+        <th class="console-th">Email</th>
+        <th class="console-th">Status</th>
+        <th class="console-th">Role</th>
+        <th class="console-th">IdPs</th>
+        <th class="console-th text-right"></th>
       </tr>
     </thead>
     <tbody class="divide-y divide-ink-700">
@@ -46,14 +46,14 @@
       <% end %>
       <% @users.each do |user| %>
         <tr>
-          <td class="px-5 py-3">
+          <td class="console-td">
             <div class="text-zinc-100"><%= user.email %><% if user == current_user %><span class="ml-2 text-xs text-zinc-500">(you)</span><% end %></div>
             <% if user.name.present? %><div class="text-xs text-zinc-500"><%= user.name %></div><% end %>
           </td>
-          <td class="px-5 py-3"><%= user_status_badge(user) %></td>
-          <td class="px-5 py-3 text-zinc-400"><%= user.admin? ? "admin" : "operator" %></td>
-          <td class="px-5 py-3"><%= user_idp_chips(user) %></td>
-          <td class="px-5 py-3">
+          <td class="console-td"><%= user_status_badge(user) %></td>
+          <td class="console-td text-zinc-400"><%= user.admin? ? "admin" : "operator" %></td>
+          <td class="console-td"><%= user_idp_chips(user) %></td>
+          <td class="console-td">
             <div class="flex items-center justify-end gap-2">
               <% unless user.admin? %>
                 <%= button_to "Make admin", promote_console_user_path(user.oid), method: :post,

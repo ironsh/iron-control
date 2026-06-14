@@ -1,18 +1,18 @@
 <% content_for :title, "Principals · Iron Control" %>
 
 <div class="mb-8">
-  <h1 class="text-2xl font-bold text-zinc-100">Principals</h1>
-  <p class="mt-1 text-sm text-zinc-500"><%= pluralize(@principals.size, "principal") %> across all namespaces. Click a row to inspect its grants.</p>
+  <h1 class="page-title">Principals</h1>
+  <p class="page-subtitle"><%= pluralize(@principals.size, "principal") %> across all namespaces. Click a row to inspect its grants.</p>
 </div>
 
-<div class="overflow-hidden rounded-xl border border-ink-600 bg-ink-850/60">
-  <table class="min-w-full divide-y divide-ink-600 text-sm">
-    <thead class="bg-ink-800/80 text-left text-xs uppercase tracking-wider text-zinc-500">
+<div class="console-panel">
+  <table class="console-table">
+    <thead class="console-table-head">
       <tr>
-        <th class="px-5 py-3 font-medium">ID</th>
-        <th class="px-5 py-3 font-medium">Display Name</th>
-        <th class="px-5 py-3 font-medium">Labels</th>
-        <th class="px-5 py-3 font-medium text-right"></th>
+        <th class="console-th">ID</th>
+        <th class="console-th">Display Name</th>
+        <th class="console-th">Labels</th>
+        <th class="console-th text-right"></th>
       </tr>
     </thead>
     <tbody class="divide-y divide-ink-700">
@@ -20,9 +20,9 @@
         <tr><td colspan="4" class="px-5 py-10 text-center text-zinc-600">No principals yet.</td></tr>
       <% end %>
       <% @principals.each do |p| %>
-        <tr class="group cursor-pointer transition-colors hover:bg-iron-500/[0.06]"
+        <tr class="group cursor-pointer console-row-hover"
             onclick="window.location='<%= console_principal_path(p.oid) %>'">
-          <td class="px-5 py-3 whitespace-nowrap">
+          <td class="console-td-nowrap">
             <% if p.foreign_id.present? %>
               <div class="text-iron-400 group-hover:glow" title="<%= p.foreign_id %>"><%= truncate_middle(p.foreign_id) %></div>
               <%= id_meta_line(p.namespace, oid: p.oid) %>
@@ -31,25 +31,25 @@
               <%= id_meta_line(p.namespace) %>
             <% end %>
           </td>
-          <td class="px-5 py-3 whitespace-nowrap text-zinc-100">
+          <td class="console-td-nowrap text-zinc-100">
             <% if p.name.presence %>
               <span title="<%= p.name %>"><%= truncate_middle(p.name) %></span>
             <% else %>
               <span class="text-zinc-600">unnamed</span>
             <% end %>
           </td>
-          <td class="px-5 py-3">
+          <td class="console-td">
             <% if p.labels.present? %>
               <div class="flex flex-wrap gap-1">
                 <% p.labels.each do |k, v| %>
-                  <span class="rounded bg-iron-500/10 px-1.5 py-0.5 text-xs text-iron-300/90 ring-1 ring-iron-500/20"><%= k %>=<%= v %></span>
+                  <span class="label-chip"><%= k %>=<%= v %></span>
                 <% end %>
               </div>
             <% else %>
               <span class="text-zinc-600">—</span>
             <% end %>
           </td>
-          <td class="px-5 py-3 text-right text-zinc-600 group-hover:text-iron-400">→</td>
+          <td class="console-td text-right text-zinc-600 group-hover:text-iron-400">→</td>
         </tr>
       <% end %>
     </tbody>
