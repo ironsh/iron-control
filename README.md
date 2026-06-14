@@ -44,6 +44,28 @@ Behavior:
 
 When deploying to Kubernetes, source these values from a `Secret`, not from a `ConfigMap`.
 
+## Google And Slack Authentication
+
+The operator console always supports email and password sign-in. To add Google or Slack SSO buttons to the login page, configure an OAuth/OIDC client with the provider and set the matching client credentials in the environment. A provider is shown only when both its client ID and client secret are present.
+
+| Variable                              | Required | Description                                                                                 |
+| ------------------------------------- | -------- | ------------------------------------------------------------------------------------------- |
+| `IRON_CONTROL_PUBLIC_URL`             | recommended | Public origin for this deployment, for example `https://control.example.com`. Use this when `iron-control` runs behind a proxy or load balancer whose internal host does not match the public URL. |
+| `IRON_CONTROL_GOOGLE_CLIENT_ID`       | for Google | Google OAuth client ID for console login.                                                    |
+| `IRON_CONTROL_GOOGLE_CLIENT_SECRET`   | for Google | Google OAuth client secret for console login.                                                |
+| `IRON_CONTROL_SLACK_CLIENT_ID`        | for Slack | Slack OpenID Connect client ID for console login.                                            |
+| `IRON_CONTROL_SLACK_CLIENT_SECRET`    | for Slack | Slack OpenID Connect client secret for console login.                                        |
+| `IRON_CONTROL_BOOTSTRAP_ADMINS`       | no       | Comma- or whitespace-separated email allowlist. Matching users become active admins on first SSO login. Other new SSO users are created as pending users. |
+
+Register these callback URLs with the provider:
+
+- Google: `<IRON_CONTROL_PUBLIC_URL>/auth/google/callback`
+- Slack: `<IRON_CONTROL_PUBLIC_URL>/auth/slack/callback`
+
+Both providers request the `openid`, `email`, and `profile` scopes. Client credentials may also be stored in Rails credentials under `console_auth.<provider>.client_id` and `console_auth.<provider>.client_secret`, but environment variables take precedence.
+
+Google OAuth consent apps for broker credentials are configured separately in the console under **OAuth Apps**. Those app callbacks use `/oauth/<slug>/callback` and currently support Google only; Slack support here applies to operator console sign-in.
+
 ## Encryption Keys
 
 `iron-control` uses ActiveRecord encryption to protect secrets stored in the control plane (for example, the `control_plane` secret source type). The following environment variables configure the encryption keys:
