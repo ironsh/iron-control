@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_11_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_12_100100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -319,11 +319,29 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_11_130000) do
     t.index ["namespace", "foreign_id"], name: "index_static_secrets_on_namespace_and_foreign_id", unique: true
   end
 
+  create_table "user_identities", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "email"
+    t.boolean "email_verified", default: false, null: false
+    t.string "provider", null: false
+    t.string "subject", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["provider", "subject"], name: "index_user_identities_on_provider_and_subject", unique: true
+    t.index ["user_id"], name: "index_user_identities_on_user_id"
+  end
+
   create_table "users", force: :cascade do |t|
+    t.boolean "admin", default: false, null: false
+    t.datetime "approved_at"
+    t.bigint "approved_by_id"
     t.datetime "created_at", null: false
     t.string "email", null: false
-    t.string "password_digest", null: false
+    t.string "name"
+    t.string "password_digest"
+    t.string "status", default: "pending", null: false
     t.datetime "updated_at", null: false
+    t.index ["approved_by_id"], name: "index_users_on_approved_by_id"
     t.index ["email"], name: "index_users_on_email", unique: true
   end
 
@@ -362,4 +380,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_11_130000) do
   add_foreign_key "secret_sources", "pg_dsn_secrets"
   add_foreign_key "secret_sources", "static_secrets"
   add_foreign_key "static_secrets", "users", column: "created_by_id"
+  add_foreign_key "user_identities", "users"
+  add_foreign_key "users", "users", column: "approved_by_id"
 end

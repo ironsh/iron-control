@@ -23,6 +23,7 @@ module Oauth
     layout "auth"
 
     skip_before_action :require_login
+    skip_before_action :require_active_account
 
     # The message_verifier purpose binding the signed state to this flow, the
     # state/cookie lifetime, and the encrypted cookie that ties a callback back to
