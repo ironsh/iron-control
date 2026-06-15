@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "iron-control.fullname" . }}-jobs
+  labels:
+    {{- include "iron-control.labels" . | nindent 4 }}
+    app.kubernetes.io/component: jobs
+spec:
+  replicas: {{ .Values.jobs.replicas }}
+  # Recreate avoids doubled recurring-job scheduler capacity mid-rollout.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "iron-control.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: jobs
+  template:
+    metadata:
+      annotations:
+        {{- if not .Values.secrets.existingSecret }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.jobs.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "iron-control.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: jobs
+        {{- with .Values.jobs.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "iron-control.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: jobs
+          image: {{ include "iron-control.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["./bin/jobs"]
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          env:
+            - name: IRON_CONTROL_JOB_CONCURRENCY
+              value: {{ .Values.config.jobConcurrency | quote }}
+            {{- include "iron-control.commonEnv" . | nindent 12 }}
+            {{- with .Values.jobs.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          envFrom:
+            {{- include "iron-control.commonEnvFrom" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.jobs.resources | nindent 12 }}
+      {{- with .Values.jobs.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.jobs.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.jobs.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

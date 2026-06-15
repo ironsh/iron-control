@@ -1,0 +1,6 @@
+apiVersion: v2
+name: iron-control
+description: Iron Control web server and Solid Queue background job workers
+type: application
+version: 0.1.0
+appVersion: "latest"
